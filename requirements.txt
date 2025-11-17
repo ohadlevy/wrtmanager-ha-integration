@@ -1,0 +1,10 @@
+# Production dependencies for WrtManager Home Assistant Integration
+# These are bundled with Home Assistant and don't need separate installation
+
+# Core dependencies (provided by Home Assistant)
+aiohttp>=3.8.0
+asyncio-timeout>=4.0.0
+voluptuous>=0.13.0
+
+# Optional dependencies for enhanced functionality
+aiofiles>=0.8.0  # For async file operations (OUI database downloads)

@@ -1,0 +1,16 @@
+{
+  "domain": "wrtmanager",
+  "name": "WrtManager",
+  "documentation": "https://github.com/ohadlevy/wrtmanager-ha-integration",
+  "issue_tracker": "https://github.com/ohadlevy/wrtmanager-ha-integration/issues",
+  "codeowners": ["@ohadlevy"],
+  "config_flow": true,
+  "dependencies": [],
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "dhcp": [],
+  "homekit": {},
+  "version": "1.0.0",
+  "iot_class": "local_polling"
+}
