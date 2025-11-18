@@ -109,14 +109,24 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         # Process collected data
         all_devices: List[Dict[str, Any]] = []
         dhcp_data: Dict[str, Any] = {}
+        system_info: Dict[str, Any] = {}
+        interfaces: Dict[str, Any] = {}
 
         for i, (host, result) in enumerate(zip(self.sessions.keys(), router_data_results)):
             if isinstance(result, Exception):
                 _LOGGER.error("Data collection failed for %s: %s", host, result)
                 continue
 
-            wifi_devices, router_dhcp_data = result
+            wifi_devices, router_dhcp_data, router_system_data, router_interface_data = result
             all_devices.extend(wifi_devices)
+
+            # Store system data for each router
+            if router_system_data:
+                system_info[host] = router_system_data
+
+            # Store interface data for each router
+            if router_interface_data:
+                interfaces[host] = router_interface_data
 
             # Use DHCP data from the first router that provides it
             if not dhcp_data and router_dhcp_data:
@@ -128,10 +138,16 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         # Update roaming detection
         self._update_roaming_detection(enriched_devices)
 
-        _LOGGER.debug("Successfully updated data: %d devices", len(enriched_devices))
+        _LOGGER.debug(
+            "Successfully updated data: %d devices, %d routers",
+            len(enriched_devices),
+            len(system_info),
+        )
 
         return {
             "devices": enriched_devices,
+            "system_info": system_info,
+            "interfaces": interfaces,
             "routers": list(self.sessions.keys()),
             "last_update": datetime.now(),
             "total_devices": len(enriched_devices),
@@ -149,34 +165,52 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
     async def _collect_router_data(
         self, host: str, session_id: str
-    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    ) -> tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """Collect data from a single router."""
         client = self.routers[host]
         wifi_devices = []
         dhcp_data = {}
+        system_data = {}
+        interface_data = {}
 
         try:
-            # Get wireless interfaces
+            # Get wireless interfaces and device associations
             interfaces = await client.get_wireless_devices(session_id)
             if not interfaces:
                 _LOGGER.warning("No wireless interfaces found on %s", host)
-                return wifi_devices, dhcp_data
 
             # Get device associations for each interface
-            for interface in interfaces:
-                associations = await client.get_device_associations(session_id, interface)
-                if associations:
-                    for device_data in associations:
-                        wifi_devices.append(
-                            {
-                                ATTR_MAC: device_data.get("mac", "").upper(),
-                                ATTR_INTERFACE: interface,
-                                ATTR_SIGNAL_DBM: device_data.get("signal"),
-                                ATTR_ROUTER: host,
-                                ATTR_CONNECTED: True,
-                                ATTR_LAST_SEEN: datetime.now(),
-                            }
-                        )
+            if interfaces:
+                for interface in interfaces:
+                    associations = await client.get_device_associations(session_id, interface)
+                    if associations:
+                        for device_data in associations:
+                            wifi_devices.append(
+                                {
+                                    ATTR_MAC: device_data.get("mac", "").upper(),
+                                    ATTR_INTERFACE: interface,
+                                    ATTR_SIGNAL_DBM: device_data.get("signal"),
+                                    ATTR_ROUTER: host,
+                                    ATTR_CONNECTED: True,
+                                    ATTR_LAST_SEEN: datetime.now(),
+                                }
+                            )
+
+            # Get system information for monitoring
+            system_info = await client.get_system_info(session_id)
+            system_board = await client.get_system_board(session_id)
+
+            if system_info:
+                system_data = {**system_info, **(system_board or {})}
+
+            # Get network interface status
+            network_interfaces = await client.get_network_interfaces(session_id)
+            wireless_status = await client.get_wireless_status(session_id)
+
+            if network_interfaces:
+                interface_data.update(network_interfaces)
+            if wireless_status:
+                interface_data.update(wireless_status)
 
             # Try to get DHCP data (usually only from main router)
             dhcp_leases = await client.get_dhcp_leases(session_id)
@@ -189,7 +223,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Error collecting data from %s: %s", host, ex)
             raise UpdateFailed(f"Data collection failed for {host}: {ex}")
 
-        return wifi_devices, dhcp_data
+        return wifi_devices, dhcp_data, system_data, interface_data
 
     def _parse_dhcp_data(
         self, dhcp_leases: Optional[Dict], static_hosts: Optional[Dict]

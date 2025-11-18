@@ -167,6 +167,21 @@ class UbusClient:
         except aiohttp.ClientError as ex:
             raise UbusConnectionError(f"Connection error: {ex}")
 
+    async def get_network_interfaces(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get network interface information."""
+        result = await self.call_ubus(session_id, "network.device", "status", {})
+        return result if result else None
+
+    async def get_wireless_status(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get wireless interface status."""
+        result = await self.call_ubus(session_id, "network.wireless", "status", {})
+        return result if result else None
+
+    async def get_system_board(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get system board information."""
+        result = await self.call_ubus(session_id, "system", "board", {})
+        return result if result else None
+
     async def close(self) -> None:
         """Close the HTTP session."""
         if self._session:
