@@ -1,4 +1,5 @@
 """Device identification and management for WrtManager."""
+
 from __future__ import annotations
 
 import logging
@@ -169,8 +170,7 @@ class DeviceManager:
 
         # IoT and smart home
         if any(
-            keyword in vendor_lower
-            for keyword in ["shelly", "sonoff", "tasmota", "esp", "tuya"]
+            keyword in vendor_lower for keyword in ["shelly", "sonoff", "tasmota", "esp", "tuya"]
         ):
             return DEVICE_TYPE_IOT_SWITCH
 
@@ -183,8 +183,7 @@ class DeviceManager:
 
         # Printers
         if any(
-            keyword in vendor_lower
-            for keyword in ["brother", "canon", "hp", "epson", "lexmark"]
+            keyword in vendor_lower for keyword in ["brother", "canon", "hp", "epson", "lexmark"]
         ):
             return DEVICE_TYPE_PRINTER
 
@@ -207,9 +206,7 @@ class DeviceManager:
             return DEVICE_TYPE_COMPUTER
 
         # Smart speakers
-        if any(
-            keyword in vendor_lower for keyword in ["sonos", "bose", "jbl", "harman"]
-        ):
+        if any(keyword in vendor_lower for keyword in ["sonos", "bose", "jbl", "harman"]):
             return DEVICE_TYPE_SMART_SPEAKER
 
         # Home appliances
@@ -246,10 +243,7 @@ class DeviceManager:
             return DEVICE_TYPE_NETWORK_EQUIPMENT
 
         # Robot vacuums
-        if any(
-            keyword in vendor_lower
-            for keyword in ["dreame", "roborock", "irobot", "xiaomi"]
-        ):
+        if any(keyword in vendor_lower for keyword in ["dreame", "roborock", "irobot", "xiaomi"]):
             return DEVICE_TYPE_ROBOT_VACUUM
 
         return DEVICE_TYPE_UNKNOWN
@@ -302,9 +296,7 @@ class DeviceManager:
                         )
                         return True
                     else:
-                        _LOGGER.error(
-                            "Failed to download OUI database: HTTP %d", response.status
-                        )
+                        _LOGGER.error("Failed to download OUI database: HTTP %d", response.status)
                         return False
 
         except Exception as ex:

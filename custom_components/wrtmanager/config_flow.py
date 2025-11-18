@@ -1,4 +1,5 @@
 """Config flow for WrtManager integration."""
+
 from __future__ import annotations
 
 import logging
@@ -40,9 +41,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
-async def validate_router_connection(
-    hass: HomeAssistant, data: dict[str, Any]
-) -> dict[str, Any]:
+async def validate_router_connection(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate that we can connect to the router and authenticate."""
     ubus_client = UbusClient(
         host=data[CONF_HOST],
@@ -53,30 +52,28 @@ async def validate_router_connection(
 
     try:
         # Test authentication and basic ubus functionality
-        session_id = await hass.async_add_executor_job(
-            ubus_client.authenticate
-        )
+        session_id = await hass.async_add_executor_job(ubus_client.authenticate)
 
         if not session_id:
             raise InvalidAuth("Authentication failed")
 
         # Test basic iwinfo capability
-        devices = await hass.async_add_executor_job(
-            ubus_client.get_wireless_devices, session_id
-        )
+        devices = await hass.async_add_executor_job(ubus_client.get_wireless_devices, session_id)
 
         if devices is None:
             raise CannotConnect("Failed to get wireless device list")
 
         # Return info about the router
-        system_info = await hass.async_add_executor_job(
-            ubus_client.get_system_info, session_id
-        )
+        system_info = await hass.async_add_executor_job(ubus_client.get_system_info, session_id)
 
         return {
             "title": data[CONF_NAME],
             "model": system_info.get("model", "Unknown") if system_info else "Unknown",
-            "version": system_info.get("release", {}).get("version", "Unknown") if system_info else "Unknown",
+            "version": (
+                system_info.get("release", {}).get("version", "Unknown")
+                if system_info
+                else "Unknown"
+            ),
             "capabilities": ["iwinfo", "ubus", "dhcp"] if devices else ["basic"],
         }
 
@@ -98,15 +95,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._routers: list[dict[str, Any]] = []
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             try:
-                info = await validate_router_connection(self.hass, user_input)
+                await validate_router_connection(self.hass, user_input)
 
                 # Add router to our list
                 router_config = {
@@ -135,9 +130,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_add_more(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_add_more(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Ask if user wants to add more routers."""
         if user_input is not None:
             if user_input.get("add_more", False):
@@ -145,8 +138,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_user()
             else:
                 # Create the config entry with all routers
+                router_count = len(self._routers)
+                plural = "s" if router_count > 1 else ""
+                title = f"WrtManager ({router_count} router{plural})"
                 return self.async_create_entry(
-                    title=f"WrtManager ({len(self._routers)} router{'s' if len(self._routers) > 1 else ''})",
+                    title=title,
                     data={CONF_ROUTERS: self._routers},
                 )
 

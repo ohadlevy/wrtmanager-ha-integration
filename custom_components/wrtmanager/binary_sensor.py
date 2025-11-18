@@ -1,4 +1,5 @@
 """Binary sensor platform for WrtManager."""
+
 from __future__ import annotations
 
 import logging

@@ -1,4 +1,5 @@
 """HTTP ubus client for OpenWrt routers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -120,9 +121,7 @@ class UbusClient:
         self, session_id: str, interface: str
     ) -> Optional[List[Dict[str, Any]]]:
         """Get associated devices for a wireless interface."""
-        result = await self.call_ubus(
-            session_id, "iwinfo", "assoclist", {"device": interface}
-        )
+        result = await self.call_ubus(session_id, "iwinfo", "assoclist", {"device": interface})
         return result.get("results", []) if result else None
 
     async def get_dhcp_leases(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -132,9 +131,7 @@ class UbusClient:
 
     async def get_static_dhcp_hosts(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get static DHCP host configurations."""
-        result = await self.call_ubus(
-            session_id, "uci", "get", {"config": "dhcp", "type": "host"}
-        )
+        result = await self.call_ubus(session_id, "uci", "get", {"config": "dhcp", "type": "host"})
         return result if result else None
 
     async def get_system_info(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -148,7 +145,7 @@ class UbusClient:
             self._session = aiohttp.ClientSession()
 
         try:
-            with async_timeout.timeout(self.timeout):
+            async with async_timeout.timeout(self.timeout):
                 async with self._session.post(
                     self.base_url,
                     json=data,

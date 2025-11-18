@@ -1,4 +1,5 @@
 """Data update coordinator for WrtManager."""
+
 from __future__ import annotations
 
 import asyncio
@@ -79,8 +80,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
         # Authenticate with all routers in parallel
         auth_tasks = [
-            self._authenticate_router(host, client)
-            for host, client in self.routers.items()
+            self._authenticate_router(host, client) for host, client in self.routers.items()
         ]
 
         auth_results = await asyncio.gather(*auth_tasks, return_exceptions=True)
@@ -167,14 +167,16 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 associations = await client.get_device_associations(session_id, interface)
                 if associations:
                     for device_data in associations:
-                        wifi_devices.append({
-                            ATTR_MAC: device_data.get("mac", "").upper(),
-                            ATTR_INTERFACE: interface,
-                            ATTR_SIGNAL_DBM: device_data.get("signal"),
-                            ATTR_ROUTER: host,
-                            ATTR_CONNECTED: True,
-                            ATTR_LAST_SEEN: datetime.now(),
-                        })
+                        wifi_devices.append(
+                            {
+                                ATTR_MAC: device_data.get("mac", "").upper(),
+                                ATTR_INTERFACE: interface,
+                                ATTR_SIGNAL_DBM: device_data.get("signal"),
+                                ATTR_ROUTER: host,
+                                ATTR_CONNECTED: True,
+                                ATTR_LAST_SEEN: datetime.now(),
+                            }
+                        )
 
             # Try to get DHCP data (usually only from main router)
             dhcp_leases = await client.get_dhcp_leases(session_id)
@@ -294,7 +296,10 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 if (
                     previous_primary
                     and previous_primary != current_primary
-                    and (datetime.now() - self._device_history.get(mac, {}).get("last_change", datetime.min)).seconds
+                    and (
+                        datetime.now()
+                        - self._device_history.get(mac, {}).get("last_change", datetime.min)
+                    ).seconds
                     >= ROAMING_DETECTION_THRESHOLD
                 ):
                     roaming_count += 1
@@ -332,8 +337,4 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         if not self.data or "devices" not in self.data:
             return []
 
-        return [
-            device
-            for device in self.data["devices"]
-            if device.get(ATTR_ROUTER) == router
-        ]
+        return [device for device in self.data["devices"] if device.get(ATTR_ROUTER) == router]

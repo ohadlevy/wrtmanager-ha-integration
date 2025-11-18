@@ -81,7 +81,7 @@ SIGNAL_FAIR = -70
 # Update intervals
 UPDATE_INTERVAL_FAST = 15  # seconds, for active monitoring
 UPDATE_INTERVAL_NORMAL = 30  # seconds, default
-UPDATE_INTERVAL_SLOW = 60   # seconds, for less critical data
+UPDATE_INTERVAL_SLOW = 60  # seconds, for less critical data
 
 # Error messages
 ERROR_CANNOT_CONNECT = "cannot_connect"
@@ -91,4 +91,4 @@ ERROR_TIMEOUT = "timeout"
 
 # IEEE 802.11r roaming detection
 ROAMING_DETECTION_THRESHOLD = 10  # seconds between AP changes to detect roaming
-ROAMING_SIGNAL_HYSTERESIS = 10    # dBm difference to prefer new AP
+ROAMING_SIGNAL_HYSTERESIS = 10  # dBm difference to prefer new AP
