@@ -10,9 +10,9 @@ import sys
 from pathlib import Path
 
 # Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components" / "wrtmanager"))
 
-from wrtmanager.ubus_client import UbusClient
+from ubus_client import UbusClient
 
 
 class DataValidator:

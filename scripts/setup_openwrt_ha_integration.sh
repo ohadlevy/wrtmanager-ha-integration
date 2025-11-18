@@ -171,7 +171,9 @@ run_on_router "
                 \"uci\": [ \"get\" ],
                 \"network.wireless\": [ \"status\" ],
                 \"network.device\": [ \"status\" ],
-                \"dhcp\": [ \"ipv4leases\", \"ipv6leases\" ]
+                \"dhcp\": [ \"ipv4leases\", \"ipv6leases\" ],
+                \"log\": [ \"read\" ],
+                \"file\": [ \"read\", \"list\" ]
             }
         },
         \"write\": {

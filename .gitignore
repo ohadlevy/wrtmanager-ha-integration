@@ -139,4 +139,4 @@ ieee-oui36.txt
 # Local development
 .env.local
 local_settings.py
-test_credentials.json
+test_credentials.jsonopenwrt_data_validation.json
