@@ -1,0 +1,191 @@
+{
+  "data_sources": {
+    "iwinfo.devices": {
+      "description": "Wireless device list",
+      "sample_data": {
+        "devices": [
+          "phy0-ap0",
+          "phy1-ap0",
+          "phy0-ap1"
+        ]
+      },
+      "data_keys": [
+        "devices"
+      ],
+      "status": "success"
+    },
+    "iwinfo.assoclist": {
+      "description": "Associated clients on phy0-ap0",
+      "sample_data": "{'results': [{'mac': 'CC:8C:BF:0A:B7:F4', 'signal': -73, 'signal_avg': -73, 'noise': -89, 'inactive': 150, 'connected_time': 93919, 'thr': 10687, 'authorized': True, 'authenticated': True, 'preamble':...",
+      "data_keys": [
+        "results"
+      ],
+      "status": "success"
+    },
+    "iwinfo.info": {
+      "description": "Device info for phy0-ap0",
+      "sample_data": "{'phy': 'phy0', 'ssid': 'unknown', 'bssid': '10:FE:ED:3B:40:9F', 'country': 'US', 'mode': 'Master', 'channel': 1, 'center_chan1': 1, 'frequency': 2412, 'frequency_offset': 0, 'txpower': 19, 'txpower_o...",
+      "data_keys": [
+        "phy",
+        "ssid",
+        "bssid",
+        "country",
+        "mode",
+        "channel",
+        "center_chan1",
+        "frequency",
+        "frequency_offset",
+        "txpower",
+        "txpower_offset",
+        "quality",
+        "quality_max",
+        "signal",
+        "noise",
+        "bitrate",
+        "encryption",
+        "htmodes",
+        "hwmodes",
+        "hwmodes_text",
+        "hwmode",
+        "htmode",
+        "hardware"
+      ],
+      "status": "success"
+    },
+    "iwinfo.scanlist": {
+      "description": "WiFi scan results on phy0-ap0",
+      "status": "no_data"
+    },
+    "iwinfo.freqlist": {
+      "description": "Frequency list for phy0-ap0",
+      "status": "no_data"
+    },
+    "iwinfo.txpowerlist": {
+      "description": "TX power list for phy0-ap0",
+      "status": "no_data"
+    },
+    "hostapd.phy0-ap0.get_clients": {
+      "description": "hostapd clients on phy0-ap0",
+      "sample_data": "{'freq': 2412, 'clients': {'cc:8c:bf:0a:b7:f4': {'auth': True, 'assoc': True, 'authorized': True, 'preauth': False, 'wds': False, 'wmm': True, 'ht': False, 'vht': False, 'he': False, 'wps': False, 'mf...",
+      "data_keys": [
+        "freq",
+        "clients"
+      ],
+      "status": "success"
+    },
+    "hostapd.phy0-ap0.get_status": {
+      "description": "hostapd status on phy0-ap0",
+      "status": "no_data"
+    },
+    "network.interface.dump": {
+      "description": "Network interfaces",
+      "status": "no_data"
+    },
+    "network.device.status": {
+      "description": "Network device status",
+      "sample_data": "{'br-iot': {'external': False, 'present': True, 'type': 'bridge', 'up': True, 'carrier': True, 'auth_status': False, 'link-advertising': [], 'link-partner-advertising': [], 'link-supported': [], 'spee...",
+      "data_keys": [
+        "br-iot",
+        "br-lan",
+        "br-o13",
+        "eth0",
+        "eth0.1",
+        "eth0.13",
+        "eth0.2",
+        "eth0.3",
+        "lo",
+        "phy0-ap0",
+        "phy0-ap1",
+        "phy1-ap0"
+      ],
+      "status": "success"
+    },
+    "network.wireless.status": {
+      "description": "Wireless network status",
+      "sample_data": "{'radio0': {'up': True, 'pending': False, 'autostart': True, 'disabled': False, 'retry_setup_failed': False, 'config': {'path': 'platform/ahb/18100000.wmac', 'channel': '1', 'band': '2g', 'htmode': 'H...",
+      "data_keys": [
+        "radio0",
+        "radio1"
+      ],
+      "status": "success"
+    },
+    "network.reload": {
+      "description": "Network reload capability",
+      "status": "no_data"
+    },
+    "system.board": {
+      "description": "System board information",
+      "sample_data": "{'kernel': '6.6.104', 'hostname': 'rutr-mamad', 'system': 'Atheros AR9344 rev 2', 'model': 'TP-Link TL-WDR4300 v1', 'board_name': 'tplink,tl-wdr4300-v1', 'rootfs_type': 'squashfs', 'release': {'distri...",
+      "data_keys": [
+        "kernel",
+        "hostname",
+        "system",
+        "model",
+        "board_name",
+        "rootfs_type",
+        "release"
+      ],
+      "status": "success"
+    },
+    "system.info": {
+      "description": "System information",
+      "sample_data": "{'localtime': 1763459202, 'uptime': 353156, 'load': [22720, 5280, 1696], 'memory': {'total': 124063744, 'free': 57556992, 'shared': 1339392, 'buffered': 0, 'available': 49184768, 'cached': 23998464}, ...",
+      "data_keys": [
+        "localtime",
+        "uptime",
+        "load",
+        "memory",
+        "root",
+        "tmp",
+        "swap"
+      ],
+      "status": "success"
+    },
+    "system.reboot": {
+      "description": "Reboot capability (dry-run)",
+      "status": "no_data"
+    },
+    "dhcp.ipv4leases": {
+      "description": "DHCP IPv4 leases",
+      "status": "no_data"
+    },
+    "dhcp.ipv6leases": {
+      "description": "DHCP IPv6 leases",
+      "status": "no_data"
+    },
+    "luci-rpc.getConntrackList": {
+      "description": "Connection tracking",
+      "status": "no_data"
+    },
+    "luci-rpc.getRealtimeStats": {
+      "description": "Real-time interface stats",
+      "status": "no_data"
+    },
+    "luci-rpc.getNetworkDevices": {
+      "description": "Network devices via LuCI",
+      "status": "no_data"
+    },
+    "uci.configs": {
+      "description": "Available UCI configurations",
+      "status": "no_data"
+    },
+    "uci.get": {
+      "description": "Network UCI configuration",
+      "status": "no_data"
+    },
+    "log.read": {
+      "description": "System log (last 10 lines)",
+      "status": "no_data"
+    },
+    "file.list": {
+      "description": "Network proc files",
+      "status": "no_data"
+    }
+  },
+  "errors": {},
+  "summary": {
+    "total_apis_tested": 24,
+    "successful_apis": 24,
+    "failed_apis": 0
+  }
+}
