@@ -88,6 +88,7 @@ ERROR_CANNOT_CONNECT = "cannot_connect"
 ERROR_INVALID_AUTH = "invalid_auth"
 ERROR_UNKNOWN = "unknown"
 ERROR_TIMEOUT = "timeout"
+ERROR_ALREADY_CONFIGURED = "already_configured"
 
 # IEEE 802.11r roaming detection
 ROAMING_DETECTION_THRESHOLD = 10  # seconds between AP changes to detect roaming

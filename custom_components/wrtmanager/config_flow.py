@@ -21,6 +21,7 @@ from .const import (
     CONF_ROUTERS,
     DEFAULT_USERNAME,
     DOMAIN,
+    ERROR_ALREADY_CONFIGURED,
     ERROR_CANNOT_CONNECT,
     ERROR_INVALID_AUTH,
     ERROR_TIMEOUT,
@@ -52,29 +53,49 @@ async def validate_router_connection(hass: HomeAssistant, data: dict[str, Any]) 
 
     try:
         # Test authentication and basic ubus functionality
-        session_id = await hass.async_add_executor_job(ubus_client.authenticate)
+        session_id = await ubus_client.authenticate()
 
         if not session_id:
             raise InvalidAuth("Authentication failed")
 
         # Test basic iwinfo capability
-        devices = await hass.async_add_executor_job(ubus_client.get_wireless_devices, session_id)
+        devices = await ubus_client.get_wireless_devices(session_id)
 
         if devices is None:
             raise CannotConnect("Failed to get wireless device list")
 
-        # Return info about the router
-        system_info = await hass.async_add_executor_job(ubus_client.get_system_info, session_id)
+        # Get system info for router details
+        system_info = await ubus_client.get_system_info(session_id)
+        system_board = await ubus_client.get_system_board(session_id)
+
+        # Test DHCP capability (optional - may not work on dump APs)
+        dhcp_capability = False
+        try:
+            dhcp_data = await ubus_client.get_dhcp_leases(session_id)
+            dhcp_capability = dhcp_data is not None
+        except Exception:
+            pass  # DHCP not available, which is normal for APs
+
+        # Determine router type based on capabilities
+        router_type = "Main Router" if dhcp_capability else "Access Point"
+
+        # Close the connection
+        await ubus_client.close()
 
         return {
             "title": data[CONF_NAME],
-            "model": system_info.get("model", "Unknown") if system_info else "Unknown",
+            "model": system_board.get("model", "Unknown") if system_board else "Unknown",
             "version": (
                 system_info.get("release", {}).get("version", "Unknown")
                 if system_info
                 else "Unknown"
             ),
-            "capabilities": ["iwinfo", "ubus", "dhcp"] if devices else ["basic"],
+            "router_type": router_type,
+            "capabilities": {
+                "wireless": len(devices) if devices else 0,
+                "dhcp": dhcp_capability,
+                "system_info": system_info is not None,
+            },
         }
 
     except InvalidAuth:
@@ -84,6 +105,12 @@ async def validate_router_connection(hass: HomeAssistant, data: dict[str, Any]) 
     except Exception as ex:
         _LOGGER.exception("Unexpected error validating router: %s", ex)
         raise CannotConnect(f"Unknown error: {ex}")
+    finally:
+        # Ensure connection is closed
+        try:
+            await ubus_client.close()
+        except Exception:
+            pass
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -98,36 +125,57 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
+        description_placeholders = {}
 
         if user_input is not None:
             try:
+                # Validate connection and get router info
                 await validate_router_connection(self.hass, user_input)
 
-                # Add router to our list
-                router_config = {
-                    CONF_HOST: user_input[CONF_HOST],
-                    CONF_NAME: user_input[CONF_NAME],
-                    CONF_USERNAME: user_input[CONF_USERNAME],
-                    CONF_PASSWORD: user_input[CONF_PASSWORD],
-                    CONF_ROUTER_DESCRIPTION: user_input.get(CONF_ROUTER_DESCRIPTION, ""),
-                }
-                self._routers.append(router_config)
+                # Check for existing config entries to prevent duplicates
+                for entry in self._async_current_entries():
+                    for existing_router in entry.data.get(CONF_ROUTERS, []):
+                        if existing_router[CONF_HOST] == user_input[CONF_HOST]:
+                            errors["base"] = ERROR_ALREADY_CONFIGURED
+                            break
+                    if errors:
+                        break
 
-                # Check if user wants to add more routers
-                return await self.async_step_add_more()
+                if not errors:
+                    # Add router to our list
+                    router_config = {
+                        CONF_HOST: user_input[CONF_HOST],
+                        CONF_NAME: user_input[CONF_NAME],
+                        CONF_USERNAME: user_input[CONF_USERNAME],
+                        CONF_PASSWORD: user_input[CONF_PASSWORD],
+                        CONF_ROUTER_DESCRIPTION: user_input.get(CONF_ROUTER_DESCRIPTION, ""),
+                    }
+                    self._routers.append(router_config)
+
+                    # Proceed to add more routers
+                    return await self.async_step_add_more()
 
             except CannotConnect:
                 errors["base"] = ERROR_CANNOT_CONNECT
+                description_placeholders["error_details"] = (
+                    "Check router IP, network connectivity, and ubus HTTP endpoint"
+                )
             except InvalidAuth:
                 errors["base"] = ERROR_INVALID_AUTH
-            except Exception:  # pylint: disable=broad-except
+                description_placeholders["error_details"] = (
+                    "Verify username/password and ensure 'hass' user is configured "
+                    "with proper ACL permissions"
+                )
+            except Exception as ex:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = ERROR_UNKNOWN
+                description_placeholders["error_details"] = str(ex)
 
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
+            description_placeholders=description_placeholders,
         )
 
     async def async_step_add_more(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -141,10 +189,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 router_count = len(self._routers)
                 plural = "s" if router_count > 1 else ""
                 title = f"WrtManager ({router_count} router{plural})"
+
+                # Log successful setup
+                router_names = [router[CONF_NAME] for router in self._routers]
+                _LOGGER.info("Setting up WrtManager with routers: %s", ", ".join(router_names))
+
                 return self.async_create_entry(
                     title=title,
                     data={CONF_ROUTERS: self._routers},
                 )
+
+        # Format router list for display
+        router_details = []
+        for router in self._routers:
+            router_details.append(f"• {router[CONF_NAME]} ({router[CONF_HOST]})")
 
         return self.async_show_form(
             step_id="add_more",
@@ -155,7 +213,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             description_placeholders={
                 "router_count": str(len(self._routers)),
-                "router_list": ", ".join(router[CONF_NAME] for router in self._routers),
+                "router_list": "\n".join(router_details),
+                "plural": "s" if len(self._routers) > 1 else "",
             },
         )
 
