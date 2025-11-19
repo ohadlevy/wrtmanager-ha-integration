@@ -110,40 +110,9 @@ class DeviceManager:
         return None
 
     def _lookup_oui_from_file(self, oui: str) -> Optional[str]:
-        """Look up OUI from local database file."""
-        # Try common nmap database locations
-        oui_files = [
-            "/usr/share/nmap/nmap-mac-prefixes",
-            "/usr/local/share/nmap/nmap-mac-prefixes",
-            "/opt/homebrew/share/nmap/nmap-mac-prefixes",
-            "/usr/share/wireshark/manuf",
-        ]
-
-        for file_path in oui_files:
-            if os.path.exists(file_path):
-                try:
-                    with open(file_path, "r", encoding="utf-8") as file:
-                        for line in file:
-                            if line.startswith("#") or not line.strip():
-                                continue
-
-                            parts = line.strip().split(None, 1)
-                            if len(parts) < 2:
-                                continue
-
-                            file_oui = parts[0].upper()
-                            vendor = parts[1]
-
-                            # Handle both formats: "A4CF12" and "A4:CF:12"
-                            normalized_file_oui = file_oui.replace(":", "")
-                            normalized_search_oui = oui.replace(":", "")
-
-                            if normalized_file_oui == normalized_search_oui[:6]:
-                                return vendor
-
-                except Exception as ex:
-                    _LOGGER.debug("Error reading OUI file %s: %s", file_path, ex)
-
+        """Look up OUI from local database file (disabled to prevent blocking I/O)."""
+        # TODO: Implement async file reading or pre-load OUI database during startup
+        # Disabled to prevent blocking the event loop - return None immediately
         return None
 
     def _infer_device_type_from_vendor(self, vendor: str) -> str:

@@ -17,11 +17,20 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    PERCENTAGE,
-    UnitOfDataSize,
-    UnitOfTime,
-)
+
+# Handle HA version compatibility for units
+from homeassistant.const import CONF_HOST, CONF_NAME, PERCENTAGE
+
+# Try to import modern units, fallback to legacy values
+try:
+    from homeassistant.const import UnitOfDataSize, UnitOfTime
+
+    UNIT_MEGABYTES = UnitOfDataSize.MEGABYTES
+    UNIT_SECONDS = UnitOfTime.SECONDS
+except (ImportError, AttributeError):
+    # Fallback for older HA versions - use string constants directly
+    UNIT_MEGABYTES = "MB"
+    UNIT_SECONDS = "s"
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -31,7 +40,10 @@ from .const import (
     ATTR_MAC,
     ATTR_ROUTER,
     ATTR_VLAN_ID,
+    CONF_ROUTERS,
+    CONF_VLAN_NAMES,
     DOMAIN,
+    VLAN_NAMES,
 )
 from .coordinator import WrtManagerCoordinator
 
@@ -47,42 +59,38 @@ async def async_setup_entry(
     coordinator: WrtManagerCoordinator = hass.data[DOMAIN][config_entry.entry_id]
 
     if not coordinator.last_update_success:
-        _LOGGER.warning(
-            "Coordinator not ready, skipping sensor setup for %s", config_entry.data.get("host")
-        )
+        _LOGGER.warning("Coordinator not ready, skipping sensor setup for %s", config_entry.title)
         return
 
-    # Create sensor entities for router monitoring
+    # Create sensor entities for each router
     entities = []
-    router_host = config_entry.data.get("host")
-    router_name = config_entry.data.get("name", router_host)
+    routers = config_entry.data.get(CONF_ROUTERS, [])
 
-    # System monitoring sensors
-    entities.extend(
-        [
-            WrtManagerUptimeSensor(coordinator, router_host, router_name),
-            WrtManagerMemoryUsageSensor(coordinator, router_host, router_name),
-            WrtManagerMemoryFreeSensor(coordinator, router_host, router_name),
-            WrtManagerLoadAverageSensor(coordinator, router_host, router_name),
-            WrtManagerTemperatureSensor(coordinator, router_host, router_name),
-        ]
-    )
+    for router_config in routers:
+        router_host = router_config[CONF_HOST]
+        router_name = router_config[CONF_NAME]
 
-    # Interface status sensors
-    if coordinator.data and "interfaces" in coordinator.data:
-        router_interfaces = coordinator.data["interfaces"].get(router_host, {})
-        for interface_name in router_interfaces:
-            entities.append(
-                WrtManagerInterfaceStatusSensor(
-                    coordinator, router_host, router_name, interface_name
-                )
-            )
+        # System monitoring sensors (create for each router)
+        entities.extend(
+            [
+                WrtManagerUptimeSensor(coordinator, router_host, router_name),
+                WrtManagerMemoryUsageSensor(coordinator, router_host, router_name),
+                WrtManagerMemoryFreeSensor(coordinator, router_host, router_name),
+                WrtManagerLoadAverageSensor(coordinator, router_host, router_name),
+                WrtManagerTemperatureSensor(coordinator, router_host, router_name),
+            ]
+        )
+        _LOGGER.info("Created system monitoring sensors for %s", router_name)
 
-    # Connected devices count sensor
-    entities.append(WrtManagerDeviceCountSensor(coordinator, router_host, router_name))
+        # Interface binary sensors are now in binary_sensor.py for better UX
+
+        # Connected devices count sensor
+        entities.append(
+            WrtManagerDeviceCountSensor(coordinator, router_host, router_name, config_entry)
+        )
 
     async_add_entities(entities)
-    _LOGGER.info("Set up %d sensors for %s", len(entities), config_entry.data.get("host"))
+    _LOGGER.info("Set up %d sensors for %d routers", len(entities), len(routers))
 
 
 class WrtManagerSensorBase(CoordinatorEntity[WrtManagerCoordinator], SensorEntity):
@@ -139,7 +147,7 @@ class WrtManagerUptimeSensor(WrtManagerSensorBase):
         """Initialize the uptime sensor."""
         super().__init__(coordinator, router_host, router_name, "uptime", "Uptime")
         self._attr_device_class = SensorDeviceClass.DURATION
-        self._attr_native_unit_of_measurement = UnitOfTime.SECONDS
+        self._attr_native_unit_of_measurement = UNIT_SECONDS
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     @property
@@ -214,7 +222,7 @@ class WrtManagerMemoryFreeSensor(WrtManagerSensorBase):
         """Initialize the free memory sensor."""
         super().__init__(coordinator, router_host, router_name, "memory_free", "Memory Free")
         self._attr_device_class = SensorDeviceClass.DATA_SIZE
-        self._attr_native_unit_of_measurement = UnitOfDataSize.MEGABYTES
+        self._attr_native_unit_of_measurement = UNIT_MEGABYTES
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:memory"
 
@@ -290,63 +298,21 @@ class WrtManagerTemperatureSensor(WrtManagerSensorBase):
         return super().available and self._get_system_data().get("temperature") is not None
 
 
-class WrtManagerInterfaceStatusSensor(WrtManagerSensorBase):
-    """Sensor for network interface status."""
+class WrtManagerDeviceCountSensor(WrtManagerSensorBase):
+    """Sensor for connected device count."""
 
     def __init__(
         self,
         coordinator: WrtManagerCoordinator,
         router_host: str,
         router_name: str,
-        interface_name: str,
+        config_entry: ConfigEntry,
     ):
-        """Initialize the interface status sensor."""
-        self._interface_name = interface_name
-        super().__init__(
-            coordinator,
-            router_host,
-            router_name,
-            f"interface_{interface_name}",
-            f"Interface {interface_name}",
-        )
-        self._attr_icon = "mdi:ethernet"
-
-    @property
-    def native_value(self) -> Optional[str]:
-        """Return interface status."""
-        if not self.coordinator.data or "interfaces" not in self.coordinator.data:
-            return None
-
-        router_interfaces = self.coordinator.data["interfaces"].get(self._router_host, {})
-        interface_data = router_interfaces.get(self._interface_name, {})
-        return interface_data.get("status", "unknown")
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return interface details."""
-        if not self.coordinator.data or "interfaces" not in self.coordinator.data:
-            return {}
-
-        router_interfaces = self.coordinator.data["interfaces"].get(self._router_host, {})
-        interface_data = router_interfaces.get(self._interface_name, {})
-
-        return {
-            "type": interface_data.get("type"),
-            "mac": interface_data.get("mac"),
-            "ip": interface_data.get("ip"),
-            "tx_bytes": interface_data.get("tx_bytes"),
-            "rx_bytes": interface_data.get("rx_bytes"),
-        }
-
-
-class WrtManagerDeviceCountSensor(WrtManagerSensorBase):
-    """Sensor for connected device count."""
-
-    def __init__(self, coordinator: WrtManagerCoordinator, router_host: str, router_name: str):
         """Initialize the device count sensor."""
         super().__init__(coordinator, router_host, router_name, "device_count", "Connected Devices")
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:devices"
+        self._config_entry = config_entry
 
     @property
     def native_value(self) -> Optional[int]:
@@ -368,23 +334,30 @@ class WrtManagerDeviceCountSensor(WrtManagerSensorBase):
         if not self.coordinator.data or "devices" not in self.coordinator.data:
             return {}
 
-        vlan_counts = {"main": 0, "iot": 0, "guest": 0, "unknown": 0}
+        # Get custom VLAN names from config entry options
+        custom_vlan_names = self._config_entry.options.get(CONF_VLAN_NAMES, {})
+        # Merge custom names with defaults
+        vlan_names = {**VLAN_NAMES, **custom_vlan_names}
+
+        # Count devices by VLAN
+        vlan_counts = {}
 
         for device in self.coordinator.data["devices"]:
             if device.get(ATTR_ROUTER) == self._router_host:
-                vlan = device.get(ATTR_VLAN_ID, 1)
-                if vlan == 1:
-                    vlan_counts["main"] += 1
-                elif vlan == 3:
-                    vlan_counts["iot"] += 1
-                elif vlan == 13:
-                    vlan_counts["guest"] += 1
-                else:
-                    vlan_counts["unknown"] += 1
+                vlan_id = device.get(ATTR_VLAN_ID, 1)
+                vlan_name = vlan_names.get(vlan_id, f"VLAN {vlan_id}")
 
-        return {
-            "main_vlan_devices": vlan_counts["main"],
-            "iot_vlan_devices": vlan_counts["iot"],
-            "guest_vlan_devices": vlan_counts["guest"],
-            "unknown_vlan_devices": vlan_counts["unknown"],
-        }
+                # Create a safe key for the attribute
+                vlan_key = vlan_name.lower().replace(" ", "_").replace("-", "_")
+                vlan_counts[vlan_key] = vlan_counts.get(vlan_key, 0) + 1
+
+        # Create dynamic attributes based on actual VLANs found
+        attributes = {}
+        for vlan_key, count in vlan_counts.items():
+            attributes[f"{vlan_key}_devices"] = count
+
+        # Add total if we have multiple VLANs
+        if len(vlan_counts) > 1:
+            attributes["total_devices"] = sum(vlan_counts.values())
+
+        return attributes

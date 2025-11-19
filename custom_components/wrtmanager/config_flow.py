@@ -19,6 +19,7 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     CONF_ROUTER_DESCRIPTION,
     CONF_ROUTERS,
+    CONF_VLAN_NAMES,
     DEFAULT_USERNAME,
     DOMAIN,
     ERROR_ALREADY_CONFIGURED,
@@ -26,6 +27,7 @@ from .const import (
     ERROR_INVALID_AUTH,
     ERROR_TIMEOUT,
     ERROR_UNKNOWN,
+    VLAN_NAMES,
 )
 from .ubus_client import UbusClient
 
@@ -121,6 +123,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         """Initialize the config flow."""
         self._routers: list[dict[str, Any]] = []
+
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        """Create the options flow."""
+        return OptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
@@ -225,3 +232,49 @@ class CannotConnect(Exception):
 
 class InvalidAuth(Exception):
     """Error to indicate there is invalid auth."""
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle WrtManager options."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            # Transform input into proper VLAN names dictionary
+            vlan_names = {}
+            for key, value in user_input.items():
+                if key.startswith("vlan_") and value.strip():
+                    vlan_id = int(key.replace("vlan_", ""))
+                    vlan_names[vlan_id] = value.strip()
+
+            # Save the custom VLAN names
+            return self.async_create_entry(title="", data={CONF_VLAN_NAMES: vlan_names})
+
+        # Get current VLAN names from options or use defaults
+        current_vlan_names = self.config_entry.options.get(CONF_VLAN_NAMES, {})
+
+        # Create form schema for VLAN customization
+        options_schema = vol.Schema(
+            {
+                vol.Optional(
+                    f"vlan_{vlan_id}",
+                    default=current_vlan_names.get(
+                        vlan_id, VLAN_NAMES.get(vlan_id, f"VLAN {vlan_id}")
+                    ),
+                ): str
+                for vlan_id in [1, 2, 3, 10, 13, 20, 100]
+            }
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=options_schema,
+            description_placeholders={
+                "description": "Customize VLAN names that will be displayed in Home Assistant. "
+                "These names will be used in device attributes and sensor breakdowns."
+            },
+        )

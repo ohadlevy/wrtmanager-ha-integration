@@ -104,9 +104,34 @@ class UbusClient:
                         status_code,
                     )
                     return None
+            elif result and len(result) == 1:
+                # Single element result is usually an error code
+                error_code = result[0]
+                if error_code == 6:
+                    # Permission denied - common for dump APs
+                    _LOGGER.debug(
+                        "ubus call %s.%s: permission denied (code 6) - normal for dump APs",
+                        service,
+                        method,
+                    )
+                    return None
+                else:
+                    _LOGGER.warning(
+                        "ubus call %s.%s failed with error code %s", service, method, error_code
+                    )
+                    return None
             else:
-                _LOGGER.error("Invalid ubus response format: %s", response_data)
-                return None
+                # Check for common errors that aren't really errors
+                if "error" in response_data and response_data["error"].get("code") == -32000:
+                    # "Object not found" - normal for dump APs and missing services
+                    _LOGGER.debug(
+                        "ubus object/method not available: %s",
+                        response_data["error"].get("message", "Unknown"),
+                    )
+                    return None
+                else:
+                    _LOGGER.debug("Unexpected ubus response format: %s", response_data)
+                    return None
 
         except Exception as ex:
             _LOGGER.error("ubus call %s.%s failed: %s", service, method, ex)

@@ -25,6 +25,7 @@ from .const import (
     ATTR_IP,
     ATTR_LAST_SEEN,
     ATTR_MAC,
+    ATTR_ROUTER,
     ATTR_SIGNAL_DBM,
     ATTR_VENDOR,
     ATTR_VLAN_ID,
@@ -74,8 +75,12 @@ class WrtManagerDeviceTracker(CoordinatorEntity[WrtManagerCoordinator], ScannerE
         self._device_info = self._get_device_data()
 
         # Create unique entity ID based on router and MAC
-        router_name = coordinator.config_entry.data.get("name", "router")
-        self._attr_unique_id = f"{router_name}_{self._mac_address.replace(':', '')}"
+        # Get the router name from device data if available, or use a safe default
+        device_data = self._get_device_data()
+        router_host = device_data.get(ATTR_ROUTER, "unknown_router")
+        # Use safe characters for unique ID
+        safe_router = router_host.replace(".", "_").replace("-", "_")
+        self._attr_unique_id = f"wrtmanager_{safe_router}_{self._mac_address.replace(':', '')}"
         self._attr_name = self._generate_device_name()
 
     def _get_device_data(self) -> Dict[str, Any]:
@@ -92,21 +97,67 @@ class WrtManagerDeviceTracker(CoordinatorEntity[WrtManagerCoordinator], ScannerE
         """Generate a friendly name for the device."""
         device_data = self._device_info
 
-        # Try to use hostname if available
-        if device_data.get(ATTR_HOSTNAME):
-            hostname = device_data[ATTR_HOSTNAME]
+        # Try to use hostname if available and meaningful
+        hostname = device_data.get(ATTR_HOSTNAME)
+        if hostname and hostname.strip() and hostname != "*" and hostname != "?":
             # Clean up hostname (remove domain suffixes, etc.)
-            clean_name = hostname.split(".")[0]
-            return clean_name
+            clean_name = hostname.split(".")[0].strip()
+            if clean_name and len(clean_name) > 1:
+                return clean_name
 
-        # Try to use vendor info
-        if device_data.get(ATTR_VENDOR):
-            vendor = device_data[ATTR_VENDOR]
-            device_type = device_data.get(ATTR_DEVICE_TYPE, "Device")
-            return f"{vendor} {device_type}"
+        # Try to use vendor + device type combination
+        vendor = device_data.get(ATTR_VENDOR)
+        device_type = device_data.get(ATTR_DEVICE_TYPE)
 
-        # Fall back to MAC address
-        return f"Device {self._mac_address[-8:].replace(':', '')}"
+        if vendor and device_type and device_type != "Unknown Device":
+            # Create more descriptive names based on device type
+            if "shelly" in vendor.lower():
+                return f"{vendor} Switch"
+            elif "gree" in vendor.lower() or "air" in device_type.lower():
+                return f"{vendor} AC Unit"
+            elif device_type == "IoT Switch":
+                return f"{vendor} Smart Switch"
+            elif device_type == "Mobile Device":
+                return f"{vendor} Phone"
+            elif device_type == "Computer":
+                return f"{vendor} Computer"
+            elif "smart" in device_type.lower():
+                return f"{vendor} {device_type}"
+            else:
+                return f"{vendor} {device_type}"
+
+        # Try just vendor
+        if vendor and vendor != "Unknown":
+            return f"{vendor} Device"
+
+        # Try to identify by MAC OUI (first 3 octets)
+        mac_prefix = self._mac_address[:8].upper()  # AA:BB:CC format
+
+        # Common MAC OUI mappings
+        oui_vendors = {
+            "00:1B:44": "Apple",
+            "00:25:00": "Apple",
+            "28:F0:76": "Apple",
+            "A4:5E:60": "Apple",
+            "B8:8D:12": "Apple",
+            "CC:08:8D": "Apple",
+            "10:FE:ED": "Ubiquiti",
+            "F0:9F:C2": "Ubiquiti",
+            "78:8A:20": "Ubiquiti",
+            "C8:47:8C": "Shelly",
+            "CC:8C:BF": "Gree",
+            "AE:72:AD": "Random MAC",  # Locally administered
+        }
+
+        vendor_guess = oui_vendors.get(mac_prefix)
+        if vendor_guess:
+            if vendor_guess == "Random MAC":
+                return f"Private Device {self._mac_address[-5:].replace(':', '')}"
+            else:
+                return f"{vendor_guess} Device {self._mac_address[-5:].replace(':', '')}"
+
+        # Final fallback with shorter MAC suffix
+        return f"Unknown Device {self._mac_address[-5:].replace(':', '')}"
 
     @property
     def device_info(self) -> DeviceInfo:

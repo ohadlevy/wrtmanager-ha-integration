@@ -10,6 +10,7 @@ CONF_ROUTER_NAME = "name"
 CONF_ROUTER_USERNAME = "username"
 CONF_ROUTER_PASSWORD = "password"
 CONF_ROUTER_DESCRIPTION = "description"
+CONF_VLAN_NAMES = "vlan_names"
 
 # Default values
 DEFAULT_USERNAME = "hass"
@@ -49,9 +50,13 @@ VLAN_IOT = 3
 VLAN_GUEST = 13
 
 VLAN_NAMES = {
-    VLAN_MAIN: "Main Network",
-    VLAN_IOT: "IoT Network",
-    VLAN_GUEST: "Guest Network",
+    1: "Main Network",
+    2: "Management Network",
+    3: "IoT Network",
+    10: "Secondary Network",
+    20: "Work Network",
+    100: "Guest Network",
+    # Add your custom VLANs here
 }
 
 # Device types

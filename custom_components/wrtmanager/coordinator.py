@@ -286,14 +286,54 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
     def _determine_vlan(self, device: Dict[str, Any]) -> int:
         """Determine VLAN ID from device information."""
+        interface = device.get(ATTR_INTERFACE, "")
+
+        # Try to determine VLAN from WiFi interface name patterns
+        if interface:
+            # Common OpenWrt VLAN interface naming patterns
+            interface_lower = interface.lower()
+
+            # Check for explicit VLAN tags in interface names
+            if "vlan" in interface_lower:
+                # Extract VLAN ID from names like "wlan0-vlan3", "phy0-ap1-vlan13"
+                import re
+
+                vlan_match = re.search(r"vlan(\d+)", interface_lower)
+                if vlan_match:
+                    return int(vlan_match.group(1))
+
+            # Check for common naming patterns (generic, not network-specific)
+            if any(keyword in interface_lower for keyword in ["iot", "smart", "things"]):
+                return 3  # Common IoT VLAN
+            elif any(keyword in interface_lower for keyword in ["guest", "visitor", "public"]):
+                return 100  # Common Guest VLAN
+            elif any(keyword in interface_lower for keyword in ["main", "default", "lan"]):
+                return 1  # Main VLAN
+
+            # Check for multi-AP interface patterns (ap0=main, ap1=secondary, ap2=guest)
+            elif "ap1" in interface_lower:
+                return 10  # Secondary network
+            elif "ap2" in interface_lower:
+                return 100  # Guest network
+            elif "ap0" in interface_lower:
+                return 1  # Main network
+
+        # For devices with IP addresses, try to infer from common subnet patterns
         ip = device.get(ATTR_IP)
         if ip:
-            if ip.startswith("192.168.5."):
-                return 3  # IoT VLAN
-            elif ip.startswith("192.168.13."):
-                return 13  # Guest VLAN
-            else:
-                return 1  # Main VLAN
+            # Common patterns - these are generic enough for most networks
+            ip_parts = ip.split(".")
+            if len(ip_parts) >= 3:
+                third_octet = ip_parts[2]
+                # Many networks use the third octet to indicate VLAN
+                try:
+                    vlan_candidate = int(third_octet)
+                    # Only return as VLAN if it's a reasonable VLAN ID (1-4094)
+                    if 1 <= vlan_candidate <= 4094:
+                        return vlan_candidate
+                except ValueError:
+                    pass
+
         return 1  # Default to main VLAN
 
     def _update_roaming_detection(self, devices: List[Dict[str, Any]]) -> None:
