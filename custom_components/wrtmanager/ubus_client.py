@@ -98,7 +98,7 @@ class UbusClient:
                     return result[1]  # Return the data part
                 else:
                     _LOGGER.warning(
-                        "ubus call %s.%s failed with status %s",
+                        "ubus call %s.%s failed with status %s (common codes: 1=Invalid command, 2=Invalid argument, 3=Method not found, 4=Not found, 6=Permission denied)",
                         service,
                         method,
                         status_code,
@@ -117,7 +117,10 @@ class UbusClient:
                     return None
                 else:
                     _LOGGER.warning(
-                        "ubus call %s.%s failed with error code %s", service, method, error_code
+                        "ubus call %s.%s failed with error code %s (common codes: 1=Invalid command, 2=Invalid argument, 3=Method not found, 4=Not found, 6=Permission denied)",
+                        service,
+                        method,
+                        error_code,
                     )
                     return None
             else:
@@ -177,9 +180,20 @@ class UbusClient:
                     headers={"Content-Type": "application/json"},
                 ) as response:
                     if response.status != 200:
-                        raise UbusConnectionError(
-                            f"HTTP {response.status}: {await response.text()}"
-                        )
+                        error_text = await response.text()
+                        if response.status == 403:
+                            error_msg = f"HTTP 403 Forbidden - Check if 'hass' user has proper ACL permissions on {self.host}"
+                        elif response.status == 404:
+                            error_msg = (
+                                f"HTTP 404 Not Found - ubus endpoint not available on {self.host}"
+                            )
+                        elif response.status == 401:
+                            error_msg = (
+                                f"HTTP 401 Unauthorized - Authentication failed for {self.host}"
+                            )
+                        else:
+                            error_msg = f"HTTP {response.status}: {error_text}"
+                        raise UbusConnectionError(error_msg)
 
                     response_text = await response.text()
                     try:

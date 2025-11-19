@@ -27,7 +27,7 @@ try:
 
     UNIT_MEGABYTES = UnitOfDataSize.MEGABYTES
     UNIT_SECONDS = UnitOfTime.SECONDS
-except (ImportError, AttributeError):
+except ImportError:
     # Fallback for older HA versions - use string constants directly
     UNIT_MEGABYTES = "MB"
     UNIT_SECONDS = "s"
@@ -37,8 +37,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    ATTR_HOSTNAME,
+    ATTR_INTERFACE,
     ATTR_MAC,
     ATTR_ROUTER,
+    ATTR_SIGNAL_DBM,
     ATTR_VLAN_ID,
     CONF_ROUTERS,
     CONF_VLAN_NAMES,
@@ -88,6 +91,31 @@ async def async_setup_entry(
         entities.append(
             WrtManagerDeviceCountSensor(coordinator, router_host, router_name, config_entry)
         )
+
+        # Create interface device count sensors (devices per wireless interface/SSID)
+        if coordinator.data and "devices" in coordinator.data:
+            # Get unique wireless interfaces for this router
+            wireless_interfaces = set()
+            for device in coordinator.data["devices"]:
+                if device.get(ATTR_ROUTER) == router_host:
+                    interface = device.get(ATTR_INTERFACE)
+                    if interface and (interface.startswith("wlan") or "ap" in interface.lower()):
+                        wireless_interfaces.add(interface)
+
+            # Create a device count sensor for each wireless interface
+            for interface in wireless_interfaces:
+                entities.append(
+                    WrtManagerInterfaceDeviceCountSensor(
+                        coordinator, router_host, router_name, interface, config_entry
+                    )
+                )
+
+            _LOGGER.info(
+                "Created %d interface device count sensors for %s: %s",
+                len(wireless_interfaces),
+                router_name,
+                list(wireless_interfaces),
+            )
 
     async_add_entities(entities)
     _LOGGER.info("Set up %d sensors for %d routers", len(entities), len(routers))
@@ -361,3 +389,128 @@ class WrtManagerDeviceCountSensor(WrtManagerSensorBase):
             attributes["total_devices"] = sum(vlan_counts.values())
 
         return attributes
+
+
+class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
+    """Sensor for device count per wireless interface (SSID)."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        router_host: str,
+        router_name: str,
+        interface: str,
+        config_entry: ConfigEntry,
+    ):
+        """Initialize the interface device count sensor."""
+        super().__init__(
+            coordinator,
+            router_host,
+            router_name,
+            f"device_count_{interface.replace('.', '_').replace('-', '_')}",
+            f"{interface.upper()} Devices",
+        )
+        self._interface = interface
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:wifi-marker"
+        self._config_entry = config_entry
+
+    @property
+    def native_value(self) -> Optional[int]:
+        """Return number of devices connected to this wireless interface."""
+        if not self.coordinator.data or "devices" not in self.coordinator.data:
+            return 0
+
+        # Count devices connected to this specific interface on this router
+        device_count = 0
+        for device in self.coordinator.data["devices"]:
+            if (
+                device.get(ATTR_ROUTER) == self._router_host
+                and device.get(ATTR_INTERFACE) == self._interface
+            ):
+                device_count += 1
+
+        return device_count
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return device breakdown and signal statistics for this interface."""
+        if not self.coordinator.data or "devices" not in self.coordinator.data:
+            return {}
+
+        # Get custom VLAN names from config entry options
+        custom_vlan_names = self._config_entry.options.get(CONF_VLAN_NAMES, {})
+        # Merge custom names with defaults
+        vlan_names = {**VLAN_NAMES, **custom_vlan_names}
+
+        # Analyze devices connected to this interface
+        interface_devices = []
+        signal_readings = []
+        vlan_counts = {}
+
+        for device in self.coordinator.data["devices"]:
+            if (
+                device.get(ATTR_ROUTER) == self._router_host
+                and device.get(ATTR_INTERFACE) == self._interface
+            ):
+                interface_devices.append(device)
+
+                # Collect signal strength for statistics
+                signal = device.get(ATTR_SIGNAL_DBM)
+                if signal:
+                    signal_readings.append(signal)
+
+                # Count by VLAN
+                vlan_id = device.get(ATTR_VLAN_ID, 1)
+                vlan_name = vlan_names.get(vlan_id, f"VLAN {vlan_id}")
+                vlan_key = vlan_name.lower().replace(" ", "_").replace("-", "_")
+                vlan_counts[vlan_key] = vlan_counts.get(vlan_key, 0) + 1
+
+        attributes = {
+            "interface": self._interface,
+            "router": self._router_name,
+            "total_devices": len(interface_devices),
+        }
+
+        # Add VLAN breakdown if devices exist
+        if vlan_counts:
+            attributes.update(
+                {f"{vlan_key}_devices": count for vlan_key, count in vlan_counts.items()}
+            )
+
+        # Add signal statistics if available
+        if signal_readings:
+            attributes.update(
+                {
+                    "avg_signal_dbm": round(sum(signal_readings) / len(signal_readings), 1),
+                    "min_signal_dbm": min(signal_readings),
+                    "max_signal_dbm": max(signal_readings),
+                    "signal_quality": self._calculate_signal_quality(signal_readings),
+                }
+            )
+
+        # Add device list (up to 10 devices for brevity)
+        if interface_devices:
+            device_list = []
+            for i, device in enumerate(interface_devices[:10]):
+                device_name = device.get(ATTR_HOSTNAME, device.get(ATTR_MAC, "Unknown"))
+                device_list.append(device_name)
+
+            attributes["connected_devices"] = device_list
+            if len(interface_devices) > 10:
+                attributes["additional_devices"] = len(interface_devices) - 10
+
+        return attributes
+
+    def _calculate_signal_quality(self, signal_readings: List[float]) -> str:
+        """Calculate overall signal quality for the interface."""
+        avg_signal = sum(signal_readings) / len(signal_readings)
+
+        if avg_signal >= -50:
+            return "Excellent"
+        elif avg_signal >= -60:
+            return "Good"
+        elif avg_signal >= -70:
+            return "Fair"
+        else:
+            return "Poor"

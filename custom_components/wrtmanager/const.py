@@ -39,6 +39,17 @@ ATTR_DATA_SOURCE = "data_source"
 ATTR_ROAMING_COUNT = "roaming_count"
 ATTR_PRIMARY_AP = "primary_ap"
 
+# SSID-related attributes
+ATTR_SSID_NAME = "ssid_name"
+ATTR_SSID_INTERFACE = "ssid_interface"
+ATTR_RADIO = "radio"
+ATTR_ENCRYPTION = "encryption"
+ATTR_HIDDEN = "hidden"
+ATTR_CLIENT_ISOLATION = "client_isolation"
+ATTR_SSID_MODE = "ssid_mode"
+ATTR_SSID_DISABLED = "ssid_disabled"
+ATTR_NETWORK_INTERFACE = "network_interface"
+
 # Entity types
 ENTITY_TYPE_DEVICE_PRESENCE = "device_presence"
 ENTITY_TYPE_SIGNAL_STRENGTH = "signal_strength"

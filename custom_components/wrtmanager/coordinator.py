@@ -144,10 +144,15 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             len(system_info),
         )
 
+        # Extract SSID information from wireless status data
+        ssid_data = self._extract_ssid_data(interfaces)
+        _LOGGER.debug("Extracted SSID data: %s", ssid_data)
+
         return {
             "devices": enriched_devices,
             "system_info": system_info,
             "interfaces": interfaces,
+            "ssids": ssid_data,
             "routers": list(self.sessions.keys()),
             "last_update": datetime.now(),
             "total_devices": len(enriched_devices),
@@ -206,6 +211,29 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             # Get network interface status
             network_interfaces = await client.get_network_interfaces(session_id)
             wireless_status = await client.get_wireless_status(session_id)
+
+            _LOGGER.debug(
+                "Router %s - network_interfaces result: %s",
+                host,
+                list(network_interfaces.keys()) if network_interfaces else None,
+            )
+            _LOGGER.debug(
+                "Router %s - wireless_status result: %s",
+                host,
+                list(wireless_status.keys()) if wireless_status else None,
+            )
+
+            # Log detailed information about wireless status availability for SSID features
+            if wireless_status is None:
+                _LOGGER.warning(
+                    "Router %s - network.wireless.status call failed. Check previous logs for specific error codes.",
+                    host,
+                )
+                _LOGGER.info(
+                    "Router %s - SSID monitoring unavailable due to wireless status failure", host
+                )
+            else:
+                _LOGGER.debug("Router %s - Wireless status available for SSID monitoring", host)
 
             if network_interfaces:
                 interface_data.update(network_interfaces)
@@ -412,3 +440,200 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             return []
 
         return [device for device in self.data["devices"] if device.get(ATTR_ROUTER) == router]
+
+    def _extract_ssid_data(self, interfaces: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+        """Extract SSID information from wireless status data."""
+        ssid_data = {}
+
+        _LOGGER.debug("_extract_ssid_data called with interfaces: %s", interfaces.keys())
+
+        for router_host, router_interfaces in interfaces.items():
+            router_ssids = []
+
+            _LOGGER.debug(
+                "Processing router %s with interfaces: %s",
+                router_host,
+                list(router_interfaces.keys()),
+            )
+
+            # Check if this router has any wireless status data available
+            has_wireless_data = any(
+                isinstance(interface_data, dict) and "interfaces" in interface_data
+                for interface_data in router_interfaces.values()
+            )
+
+            if not has_wireless_data:
+                _LOGGER.info(
+                    "Router %s - No wireless SSID data available (likely dump AP mode)", router_host
+                )
+                continue
+
+            # Look for wireless status data (has radio structure)
+            for interface_name, interface_data in router_interfaces.items():
+                _LOGGER.debug(
+                    "Checking interface %s: type=%s, has_interfaces=%s",
+                    interface_name,
+                    type(interface_data),
+                    "interfaces" in interface_data if isinstance(interface_data, dict) else False,
+                )
+
+                # Skip network interfaces, focus on wireless status structure
+                if isinstance(interface_data, dict) and "interfaces" in interface_data:
+                    # This is a radio (e.g., radio0, radio1)
+                    radio_name = interface_name
+                    radio_interfaces = interface_data.get("interfaces", {})
+
+                    _LOGGER.debug(
+                        "Found radio %s with interfaces: %s (type: %s)",
+                        radio_name,
+                        (
+                            list(radio_interfaces.keys())
+                            if isinstance(radio_interfaces, dict)
+                            else radio_interfaces
+                        ),
+                        type(radio_interfaces),
+                    )
+
+                    # Handle both dict and list formats for radio interfaces
+                    if isinstance(radio_interfaces, list):
+                        # OpenWrt returns interfaces as a list
+                        _LOGGER.debug(
+                            "Processing radio %s with %d interfaces (list format)",
+                            radio_name,
+                            len(radio_interfaces),
+                        )
+                        interface_items = [
+                            (f"interface_{i}", iface_data)
+                            for i, iface_data in enumerate(radio_interfaces)
+                        ]
+                    elif isinstance(radio_interfaces, dict):
+                        # Some versions might return as dict
+                        _LOGGER.debug(
+                            "Processing radio %s with %d interfaces (dict format)",
+                            radio_name,
+                            len(radio_interfaces),
+                        )
+                        interface_items = radio_interfaces.items()
+                    else:
+                        _LOGGER.debug(
+                            "Skipping radio %s - interfaces is neither dict nor list: %s",
+                            radio_name,
+                            type(radio_interfaces),
+                        )
+                        continue
+
+                    for ssid_interface_name, ssid_interface_data in interface_items:
+                        config = ssid_interface_data.get("config", {})
+                        ssid_name = config.get("ssid")
+
+                        _LOGGER.debug(
+                            "Processing SSID interface %s: ssid_name=%s, config_keys=%s",
+                            ssid_interface_name,
+                            ssid_name,
+                            list(config.keys()),
+                        )
+
+                        # Extract SSID information
+                        ssid_info = {
+                            "radio": radio_name,
+                            "ssid_interface": ssid_interface_name,
+                            "ssid_name": ssid_name,
+                            "mode": config.get("mode", "ap"),  # default to access point
+                            "disabled": config.get("disabled", False),
+                            "network_interface": ssid_interface_data.get("ifname"),
+                            "router_host": router_host,
+                            "encryption": config.get("encryption"),
+                            "key": config.get("key"),  # WiFi password (if any)
+                            "hidden": config.get("hidden", False),
+                            "isolate": config.get("isolate", False),  # client isolation
+                            "network": config.get("network"),  # OpenWrt network name
+                            "full_config": config,
+                        }
+
+                        # Only include valid SSIDs (must have a name)
+                        if ssid_info["ssid_name"]:
+                            router_ssids.append(ssid_info)
+                            _LOGGER.debug("Added SSID %s for router %s", ssid_name, router_host)
+                        else:
+                            _LOGGER.debug(
+                                "Skipping SSID interface %s - no SSID name", ssid_interface_name
+                            )
+
+            if router_ssids:
+                ssid_data[router_host] = router_ssids
+                _LOGGER.debug("Router %s has %d SSIDs", router_host, len(router_ssids))
+            else:
+                _LOGGER.debug("Router %s has no SSIDs found", router_host)
+
+        # Consolidate SSIDs by name (group same SSID across multiple radios)
+        consolidated_ssid_data = self._consolidate_ssids_by_name(ssid_data)
+        _LOGGER.debug("Final SSID data: %s", consolidated_ssid_data)
+        return consolidated_ssid_data
+
+    def _consolidate_ssids_by_name(
+        self, ssid_data: Dict[str, List[Dict[str, Any]]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Consolidate SSIDs with the same name across multiple radios."""
+        consolidated = {}
+
+        for router_host, router_ssids in ssid_data.items():
+            # Group SSIDs by name
+            ssid_groups = {}
+            for ssid_info in router_ssids:
+                ssid_name = ssid_info["ssid_name"]
+                if ssid_name not in ssid_groups:
+                    ssid_groups[ssid_name] = []
+                ssid_groups[ssid_name].append(ssid_info)
+
+            consolidated_router_ssids = []
+
+            for ssid_name, ssid_instances in ssid_groups.items():
+                if len(ssid_instances) == 1:
+                    # Single radio SSID - keep as is
+                    consolidated_router_ssids.append(ssid_instances[0])
+                else:
+                    # Multiple radios with same SSID name - consolidate
+                    primary_ssid = ssid_instances[0].copy()
+
+                    # Combine radio information
+                    radios = [ssid["radio"] for ssid in ssid_instances]
+                    interfaces = [ssid["ssid_interface"] for ssid in ssid_instances]
+                    network_interfaces = [ssid["network_interface"] for ssid in ssid_instances]
+
+                    # Create consolidated SSID entry
+                    primary_ssid.update(
+                        {
+                            "radios": radios,  # List of all radios
+                            "ssid_interfaces": interfaces,  # List of all interfaces
+                            "network_interfaces": network_interfaces,  # List of all network interfaces
+                            "radio": f"multi_radio_{ssid_name.lower().replace(' ', '_')}",  # Virtual radio ID
+                            "is_consolidated": True,
+                            "radio_count": len(radios),
+                            "frequency_bands": self._get_frequency_bands(radios),
+                        }
+                    )
+
+                    consolidated_router_ssids.append(primary_ssid)
+
+                    _LOGGER.debug(
+                        "Consolidated SSID '%s' across %d radios: %s",
+                        ssid_name,
+                        len(radios),
+                        radios,
+                    )
+
+            consolidated[router_host] = consolidated_router_ssids
+
+        return consolidated
+
+    def _get_frequency_bands(self, radios: List[str]) -> List[str]:
+        """Get frequency bands from radio names."""
+        bands = []
+        for radio in radios:
+            if "0" in radio:
+                bands.append("2.4GHz")
+            elif "1" in radio:
+                bands.append("5GHz")
+            else:
+                bands.append("Unknown")
+        return bands
