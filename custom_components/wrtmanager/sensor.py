@@ -386,12 +386,29 @@ class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
 
         # Count devices connected to this specific interface on this router
         device_count = 0
+        interface_matches = []
+        all_device_interfaces = []
+
         for device in self.coordinator.data["devices"]:
-            if (
-                device.get(ATTR_ROUTER) == self._router_host
-                and device.get(ATTR_INTERFACE) == self._interface
-            ):
-                device_count += 1
+            if device.get(ATTR_ROUTER) == self._router_host:
+                device_interface = device.get(ATTR_INTERFACE)
+                all_device_interfaces.append(device_interface)
+
+                if device_interface == self._interface:
+                    device_count += 1
+                    interface_matches.append(device.get(ATTR_MAC, "unknown"))
+
+        # Debug logging to track interface matching issues
+        _LOGGER.debug(
+            "Interface %s on %s: found %d devices. Sensor interface='%s', "
+            "device interfaces=%s, matches=%s",
+            self._interface,
+            self._router_host,
+            device_count,
+            self._interface,
+            all_device_interfaces,
+            interface_matches,
+        )
 
         return device_count
 

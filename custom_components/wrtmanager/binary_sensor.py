@@ -46,6 +46,9 @@ from .coordinator import WrtManagerCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Module-level set to track which global SSID entities have been created during this HA session
+_CREATED_GLOBAL_SSIDS = set()
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -57,9 +60,16 @@ async def async_setup_entry(
 
     # Wait for first successful data update
     if not coordinator.data:
+        _LOGGER.debug("Binary sensor setup skipped - no coordinator data available")
         return
 
     entities = []
+
+    # Debug logging for available data
+    _LOGGER.debug(
+        "Binary sensor setup - coordinator data keys: %s",
+        list(coordinator.data.keys()) if coordinator.data else "None",
+    )
 
     # Create binary sensors for device presence
     for device in coordinator.data.get("devices", []):
@@ -91,7 +101,14 @@ async def async_setup_entry(
                 )
 
     # Create SSID binary sensors with area-based grouping (global view as primary)
+    _LOGGER.debug(
+        "Checking for SSID data: coordinator.data exists=%s, 'ssids' in data=%s",
+        bool(coordinator.data),
+        "ssids" in coordinator.data if coordinator.data else False,
+    )
+
     if coordinator.data and "ssids" in coordinator.data:
+        _LOGGER.debug("SSID data found: %s", coordinator.data.get("ssids", {}))
         ssid_entities = await _create_ssid_entities(hass, coordinator, config_entry)
         entities.extend(ssid_entities)
         _LOGGER.info("Created %d SSID binary sensors", len(ssid_entities))
@@ -102,6 +119,10 @@ async def async_setup_entry(
         elif "ssids" not in coordinator.data:
             _LOGGER.info(
                 "No SSID binary sensors created - no SSID data available (likely dump AP mode)"
+            )
+            _LOGGER.debug(
+                "Available data keys: %s",
+                list(coordinator.data.keys()) if coordinator.data else "None",
             )
         else:
             _LOGGER.debug("SSID data structure: %s", coordinator.data.get("ssids", {}))
@@ -155,17 +176,44 @@ async def _create_ssid_entities(
                 if area:
                     global_ssids[ssid_name]["areas"].add(area.name)
 
+    # Debug SSID grouping
+    _LOGGER.debug(
+        "SSID grouping results: %s",
+        {
+            ssid_name: {
+                "router_count": len(ssid_group["routers"]),
+                "instance_count": len(ssid_group["ssid_instances"]),
+                "routers": ssid_group["routers"],
+                "instance_details": [
+                    (
+                        inst["router_host"],
+                        inst["ssid_info"].get("ssid_interface", "?"),
+                        inst["ssid_info"].get("radio", "?"),
+                    )
+                    for inst in ssid_group["ssid_instances"]
+                ],
+            }
+            for ssid_name, ssid_group in global_ssids.items()
+        },
+    )
+
     # Create global SSID entities (primary usage case)
+    # Use module-level tracking to prevent duplicate creation
     for ssid_name, ssid_group in global_ssids.items():
-        # Always create global entity
-        entities.append(
-            WrtGlobalSSIDBinarySensor(
-                coordinator=coordinator,
-                ssid_name=ssid_name,
-                ssid_group=ssid_group,
-                config_entry=config_entry,
+        # Only create the entity if it hasn't been created yet in this session
+        if ssid_name not in _CREATED_GLOBAL_SSIDS:
+            entities.append(
+                WrtGlobalSSIDBinarySensor(
+                    coordinator=coordinator,
+                    ssid_name=ssid_name,
+                    ssid_group=ssid_group,
+                    config_entry=config_entry,
+                )
             )
-        )
+            _CREATED_GLOBAL_SSIDS.add(ssid_name)
+            _LOGGER.debug("Creating new global SSID entity for: %s", ssid_name)
+        else:
+            _LOGGER.debug("Skipping duplicate global SSID entity for: %s", ssid_name)
 
         # Create area-specific entities if routers are in different areas
         if len(ssid_group["areas"]) > 1:
@@ -182,15 +230,25 @@ async def _create_ssid_entities(
                             area_instances.append(instance)
 
                 if area_instances:
-                    entities.append(
-                        WrtAreaSSIDBinarySensor(
-                            coordinator=coordinator,
-                            ssid_name=ssid_name,
-                            area_name=area_name,
-                            area_instances=area_instances,
-                            config_entry=config_entry,
+                    # Create area-specific key for tracking
+                    area_ssid_key = f"{area_name}_{ssid_name}"
+
+                    if area_ssid_key not in _CREATED_GLOBAL_SSIDS:
+                        entities.append(
+                            WrtAreaSSIDBinarySensor(
+                                coordinator=coordinator,
+                                ssid_name=ssid_name,
+                                area_name=area_name,
+                                area_instances=area_instances,
+                                config_entry=config_entry,
+                            )
                         )
-                    )
+                        _CREATED_GLOBAL_SSIDS.add(area_ssid_key)
+                        _LOGGER.debug("Creating new area SSID entity: %s %s", area_name, ssid_name)
+                    else:
+                        _LOGGER.debug(
+                            "Skipping duplicate area SSID entity: %s %s", area_name, ssid_name
+                        )
 
     return entities
 
