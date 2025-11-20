@@ -11,13 +11,20 @@ class TestSSIDConsolidation:
     """Test SSID consolidation logic."""
 
     @pytest.fixture
-    def coordinator(self):
-        """Create a coordinator instance for testing."""
-        return WrtManagerCoordinator(
-            hass=Mock(), logger=Mock(), name="test", update_interval=Mock(), config_entry=Mock()
-        )
+    def coordinator_methods(self):
+        """Create coordinator methods for testing without HomeAssistant setup."""
 
-    def test_single_radio_ssid_no_consolidation(self, coordinator):
+        # Create a mock coordinator class with just the methods we need
+        class MockCoordinator:
+            def _consolidate_ssids_by_name(self, ssid_data):
+                return WrtManagerCoordinator._consolidate_ssids_by_name(self, ssid_data)
+
+            def _get_frequency_bands(self, radios):
+                return WrtManagerCoordinator._get_frequency_bands(self, radios)
+
+        return MockCoordinator()
+
+    def test_single_radio_ssid_no_consolidation(self, coordinator_methods):
         """Test that single radio SSIDs are not consolidated."""
         ssid_data = {
             "192.168.1.1": [
@@ -33,7 +40,7 @@ class TestSSIDConsolidation:
             ]
         }
 
-        consolidated = coordinator._consolidate_ssids_by_name(ssid_data)
+        consolidated = coordinator_methods._consolidate_ssids_by_name(ssid_data)
 
         # Should have one SSID, not consolidated
         assert len(consolidated["192.168.1.1"]) == 1
@@ -42,7 +49,7 @@ class TestSSIDConsolidation:
         assert ssid["radio"] == "radio0"
         assert ssid["ssid_name"] == "MainNetwork"
 
-    def test_dual_radio_ssid_consolidation(self, coordinator):
+    def test_dual_radio_ssid_consolidation(self, coordinator_methods):
         """Test that same SSID on multiple radios gets consolidated."""
         ssid_data = {
             "192.168.1.1": [
@@ -69,7 +76,7 @@ class TestSSIDConsolidation:
             ]
         }
 
-        consolidated = coordinator._consolidate_ssids_by_name(ssid_data)
+        consolidated = coordinator_methods._consolidate_ssids_by_name(ssid_data)
 
         # Should have one consolidated SSID
         assert len(consolidated["192.168.1.1"]) == 1
@@ -85,7 +92,7 @@ class TestSSIDConsolidation:
         assert ssid["radio"] == "multi_radio_dualbandnetwork"
         assert ssid["ssid_name"] == "DualBandNetwork"
 
-    def test_mixed_ssid_consolidation(self, coordinator):
+    def test_mixed_ssid_consolidation(self, coordinator_methods):
         """Test consolidation with both single and multi-radio SSIDs."""
         ssid_data = {
             "192.168.1.1": [
@@ -113,7 +120,7 @@ class TestSSIDConsolidation:
             ]
         }
 
-        consolidated = coordinator._consolidate_ssids_by_name(ssid_data)
+        consolidated = coordinator_methods._consolidate_ssids_by_name(ssid_data)
 
         # Should have two SSIDs: one consolidated, one single
         assert len(consolidated["192.168.1.1"]) == 2
@@ -134,16 +141,16 @@ class TestSSIDConsolidation:
         assert single_ssid["ssid_name"] == "Guest5GHzOnly"
         assert single_ssid["radio"] == "radio0"
 
-    def test_frequency_band_detection(self, coordinator):
+    def test_frequency_band_detection(self, coordinator_methods):
         """Test frequency band detection from radio names."""
         # Test common radio naming patterns
-        assert coordinator._get_frequency_bands(["radio0"]) == ["2.4GHz"]
-        assert coordinator._get_frequency_bands(["radio1"]) == ["5GHz"]
-        assert coordinator._get_frequency_bands(["radio0", "radio1"]) == ["2.4GHz", "5GHz"]
-        assert coordinator._get_frequency_bands(["unknown_radio"]) == ["Unknown"]
-        assert coordinator._get_frequency_bands([]) == []
+        assert coordinator_methods._get_frequency_bands(["radio0"]) == ["2.4GHz"]
+        assert coordinator_methods._get_frequency_bands(["radio1"]) == ["5GHz"]
+        assert coordinator_methods._get_frequency_bands(["radio0", "radio1"]) == ["2.4GHz", "5GHz"]
+        assert coordinator_methods._get_frequency_bands(["unknown_radio"]) == ["Unknown"]
+        assert coordinator_methods._get_frequency_bands([]) == []
 
-    def test_consolidation_with_different_configurations(self, coordinator):
+    def test_consolidation_with_different_configurations(self, coordinator_methods):
         """Test consolidation with SSIDs having different configurations."""
         ssid_data = {
             "192.168.1.1": [
@@ -172,7 +179,7 @@ class TestSSIDConsolidation:
             ]
         }
 
-        consolidated = coordinator._consolidate_ssids_by_name(ssid_data)
+        consolidated = coordinator_methods._consolidate_ssids_by_name(ssid_data)
 
         # Should still consolidate despite different disabled states
         assert len(consolidated["192.168.1.1"]) == 1
@@ -184,7 +191,7 @@ class TestSSIDConsolidation:
         assert ssid["disabled"] is False
         assert ssid["encryption"] == "psk2"
 
-    def test_consolidation_across_multiple_routers(self, coordinator):
+    def test_consolidation_across_multiple_routers(self, coordinator_methods):
         """Test consolidation works independently for each router."""
         ssid_data = {
             "192.168.1.1": [
@@ -214,7 +221,7 @@ class TestSSIDConsolidation:
             ],
         }
 
-        consolidated = coordinator._consolidate_ssids_by_name(ssid_data)
+        consolidated = coordinator_methods._consolidate_ssids_by_name(ssid_data)
 
         # Router 1 should have consolidated SSID
         assert len(consolidated["192.168.1.1"]) == 1
@@ -225,18 +232,18 @@ class TestSSIDConsolidation:
         assert len(consolidated["192.168.1.2"]) == 1
         assert consolidated["192.168.1.2"][0].get("is_consolidated", False) is False
 
-    def test_consolidation_empty_input(self, coordinator):
+    def test_consolidation_empty_input(self, coordinator_methods):
         """Test consolidation with empty input."""
         # Empty data
-        consolidated = coordinator._consolidate_ssids_by_name({})
+        consolidated = coordinator_methods._consolidate_ssids_by_name({})
         assert consolidated == {}
 
         # Router with no SSIDs
         ssid_data = {"192.168.1.1": []}
-        consolidated = coordinator._consolidate_ssids_by_name(ssid_data)
+        consolidated = coordinator_methods._consolidate_ssids_by_name(ssid_data)
         assert consolidated == {"192.168.1.1": []}
 
-    def test_consolidation_virtual_radio_naming(self, coordinator):
+    def test_consolidation_virtual_radio_naming(self, coordinator_methods):
         """Test virtual radio naming for consolidated SSIDs."""
         ssid_data = {
             "192.168.1.1": [
@@ -257,13 +264,13 @@ class TestSSIDConsolidation:
             ]
         }
 
-        consolidated = coordinator._consolidate_ssids_by_name(ssid_data)
+        consolidated = coordinator_methods._consolidate_ssids_by_name(ssid_data)
         ssid = consolidated["192.168.1.1"][0]
 
         # Virtual radio name should be based on SSID name
         assert ssid["radio"] == "multi_radio_my_home_wifi"
 
-    def test_consolidation_preserves_all_original_data(self, coordinator):
+    def test_consolidation_preserves_all_original_data(self, coordinator_methods):
         """Test that consolidation preserves all original data fields."""
         ssid_data = {
             "192.168.1.1": [
@@ -300,7 +307,7 @@ class TestSSIDConsolidation:
             ]
         }
 
-        consolidated = coordinator._consolidate_ssids_by_name(ssid_data)
+        consolidated = coordinator_methods._consolidate_ssids_by_name(ssid_data)
         ssid = consolidated["192.168.1.1"][0]
 
         # Check that original fields are preserved

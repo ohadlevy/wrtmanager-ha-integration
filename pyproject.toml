@@ -16,6 +16,9 @@ dependencies = [
     "async_timeout>=4.0.0",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["custom_components"]
+
 [project.optional-dependencies]
 dev = [
     # Testing

@@ -226,7 +226,8 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             # Log detailed information about wireless status availability for SSID features
             if wireless_status is None:
                 _LOGGER.warning(
-                    "Router %s - network.wireless.status call failed. Check previous logs for specific error codes.",
+                    "Router %s - network.wireless.status call failed. "
+                    "Check previous logs for specific error codes.",
                     host,
                 )
                 _LOGGER.info(
@@ -598,15 +599,15 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     # Combine radio information
                     radios = [ssid["radio"] for ssid in ssid_instances]
                     interfaces = [ssid["ssid_interface"] for ssid in ssid_instances]
-                    network_interfaces = [ssid["network_interface"] for ssid in ssid_instances]
+                    network_interfaces = [ssid.get("network_interface") for ssid in ssid_instances]
 
                     # Create consolidated SSID entry
                     primary_ssid.update(
                         {
                             "radios": radios,  # List of all radios
                             "ssid_interfaces": interfaces,  # List of all interfaces
-                            "network_interfaces": network_interfaces,  # List of all network interfaces
-                            "radio": f"multi_radio_{ssid_name.lower().replace(' ', '_')}",  # Virtual radio ID
+                            "network_interfaces": network_interfaces,  # List of all networks
+                            "radio": f"multi_radio_{ssid_name.lower().replace(' ', '_')}",
                             "is_consolidated": True,
                             "radio_count": len(radios),
                             "frequency_bands": self._get_frequency_bands(radios),

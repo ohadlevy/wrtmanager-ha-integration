@@ -11,6 +11,8 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -79,32 +81,11 @@ async def async_setup_entry(
                     )
                 )
 
-    # Create SSID binary sensors (enabled/disabled status)
+    # Create SSID binary sensors with area-based grouping (global view as primary)
     if coordinator.data and "ssids" in coordinator.data:
-        ssid_count = 0
-        for router_host, router_ssids in coordinator.data["ssids"].items():
-            # Find router config for this host
-            router_config = next(
-                (
-                    r
-                    for r in coordinator.config_entry.data.get("routers", [])
-                    if r["host"] == router_host
-                ),
-                None,
-            )
-            if router_config:
-                router_name = router_config["name"]
-                for ssid_info in router_ssids:
-                    entities.append(
-                        WrtSSIDBinarySensor(
-                            coordinator, router_host, router_name, ssid_info, config_entry
-                        )
-                    )
-                    ssid_count += 1
-                _LOGGER.debug(
-                    "Created %d SSID binary sensors for router %s", len(router_ssids), router_name
-                )
-        _LOGGER.info("Created %d SSID binary sensors across all routers", ssid_count)
+        ssid_entities = await _create_ssid_entities(hass, coordinator, config_entry)
+        entities.extend(ssid_entities)
+        _LOGGER.info("Created %d SSID binary sensors", len(ssid_entities))
     else:
         # Log helpful information when no SSID sensors can be created
         if not coordinator.data:
@@ -117,6 +98,352 @@ async def async_setup_entry(
             _LOGGER.debug("SSID data structure: %s", coordinator.data.get("ssids", {}))
 
     async_add_entities(entities)
+
+
+async def _create_ssid_entities(
+    hass: HomeAssistant,
+    coordinator: WrtManagerCoordinator,
+    config_entry: ConfigEntry,
+) -> List[BinarySensorEntity]:
+    """Create SSID binary sensors with area-based grouping (global view as primary)."""
+    entities = []
+
+    # Get device and area registries
+    device_registry = dr.async_get(hass)
+    area_registry = ar.async_get(hass)
+
+    # Group SSIDs by name across all routers for global view
+    global_ssids = {}
+
+    for router_config in config_entry.data.get("routers", []):
+        router_host = router_config["host"]
+        router_name = router_config["name"]
+        router_ssids = coordinator.data["ssids"].get(router_host, [])
+
+        for ssid_info in router_ssids:
+            ssid_name = ssid_info["ssid_name"]
+
+            if ssid_name not in global_ssids:
+                global_ssids[ssid_name] = {
+                    "routers": [],
+                    "ssid_instances": [],
+                    "areas": set(),
+                }
+
+            global_ssids[ssid_name]["routers"].append(router_host)
+            global_ssids[ssid_name]["ssid_instances"].append(
+                {
+                    "router_host": router_host,
+                    "router_name": router_name,
+                    "ssid_info": ssid_info,
+                }
+            )
+
+            # Check if this router is assigned to an area
+            router_device = device_registry.async_get_device(identifiers={(DOMAIN, router_host)})
+            if router_device and router_device.area_id:
+                area = area_registry.async_get_area(router_device.area_id)
+                if area:
+                    global_ssids[ssid_name]["areas"].add(area.name)
+
+    # Create global SSID entities (primary usage case)
+    for ssid_name, ssid_group in global_ssids.items():
+        # Always create global entity
+        entities.append(
+            WrtGlobalSSIDBinarySensor(
+                coordinator=coordinator,
+                ssid_name=ssid_name,
+                ssid_group=ssid_group,
+                config_entry=config_entry,
+            )
+        )
+
+        # Create area-specific entities if routers are in different areas
+        if len(ssid_group["areas"]) > 1:
+            for area_name in ssid_group["areas"]:
+                # Filter instances for this area
+                area_instances = []
+                for instance in ssid_group["ssid_instances"]:
+                    router_device = device_registry.async_get_device(
+                        identifiers={(DOMAIN, instance["router_host"])}
+                    )
+                    if router_device and router_device.area_id:
+                        area = area_registry.async_get_area(router_device.area_id)
+                        if area and area.name == area_name:
+                            area_instances.append(instance)
+
+                if area_instances:
+                    entities.append(
+                        WrtAreaSSIDBinarySensor(
+                            coordinator=coordinator,
+                            ssid_name=ssid_name,
+                            area_name=area_name,
+                            area_instances=area_instances,
+                            config_entry=config_entry,
+                        )
+                    )
+
+    return entities
+
+
+class WrtGlobalSSIDBinarySensor(CoordinatorEntity, BinarySensorEntity):
+    """Global binary sensor for SSID enabled/disabled status across all routers."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        ssid_name: str,
+        ssid_group: Dict[str, Any],
+        config_entry: ConfigEntry,
+    ) -> None:
+        """Initialize the global SSID status sensor."""
+        super().__init__(coordinator)
+        self._ssid_name = ssid_name
+        self._ssid_group = ssid_group
+        self._config_entry = config_entry
+
+        # Create unique entity ID for global SSID
+        safe_ssid = ssid_name.lower().replace(" ", "_").replace("-", "_").replace(".", "_")
+        self._attr_unique_id = f"wrtmanager_global_{safe_ssid}_enabled"
+        self._attr_name = f"Global {ssid_name} SSID"
+        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+        self._attr_icon = "mdi:wifi"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if SSID is enabled on any router."""
+        for instance in self._ssid_group["ssid_instances"]:
+            ssid_data = self._get_current_ssid_data(instance["router_host"], instance["ssid_info"])
+            if ssid_data and not ssid_data.get("disabled", False):
+                return True
+        return False
+
+    @property
+    def available(self) -> bool:
+        """Return True if at least one router has this SSID available."""
+        return self.coordinator.last_update_success and any(
+            self._get_current_ssid_data(instance["router_host"], instance["ssid_info"]) is not None
+            for instance in self._ssid_group["ssid_instances"]
+        )
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return additional state attributes."""
+        enabled_routers = []
+        disabled_routers = []
+        total_instances = 0
+        frequency_bands = set()
+        areas = list(self._ssid_group["areas"])
+
+        for instance in self._ssid_group["ssid_instances"]:
+            ssid_data = self._get_current_ssid_data(instance["router_host"], instance["ssid_info"])
+            if ssid_data:
+                total_instances += 1
+                router_name = instance["router_name"]
+
+                if ssid_data.get("disabled", False):
+                    disabled_routers.append(router_name)
+                else:
+                    enabled_routers.append(router_name)
+
+                # Collect frequency band info
+                if ssid_data.get("is_consolidated"):
+                    frequency_bands.update(ssid_data.get("frequency_bands", []))
+                else:
+                    radio = ssid_data.get("radio", "")
+                    if "0" in radio:
+                        frequency_bands.add("2.4GHz")
+                    elif "1" in radio:
+                        frequency_bands.add("5GHz")
+
+        attributes = {
+            "ssid_name": self._ssid_name,
+            "router_count": len(self._ssid_group["routers"]),
+            "enabled_routers": enabled_routers,
+            "disabled_routers": disabled_routers,
+            "total_instances": total_instances,
+            "frequency_bands": sorted(list(frequency_bands)),
+            "coverage": "Global (all routers)",
+            "areas": sorted(areas) if areas else ["No areas assigned"],
+        }
+
+        # Get common configuration from first available instance
+        for instance in self._ssid_group["ssid_instances"]:
+            ssid_data = self._get_current_ssid_data(instance["router_host"], instance["ssid_info"])
+            if ssid_data:
+                attributes.update(
+                    {
+                        "ssid_mode": ssid_data.get("mode", "ap"),
+                        "encryption": ssid_data.get("encryption"),
+                        "hidden": ssid_data.get("hidden", False),
+                        "network_name": ssid_data.get("network"),
+                    }
+                )
+                break
+
+        return {k: v for k, v in attributes.items() if v is not None}
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information for grouping."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"global_ssid_{self._ssid_name}")},
+            name=f"Global {self._ssid_name}",
+            manufacturer="WrtManager",
+            model="Global SSID Controller",
+            via_device=(DOMAIN, self._ssid_group["routers"][0]),  # Reference first router
+        )
+
+    def _get_current_ssid_data(
+        self, router_host: str, original_ssid_info: Dict[str, Any]
+    ) -> Dict[str, Any] | None:
+        """Get current SSID data from coordinator for specific router."""
+        if not self.coordinator.data or "ssids" not in self.coordinator.data:
+            return None
+
+        router_ssids = self.coordinator.data["ssids"].get(router_host, [])
+
+        for ssid_data in router_ssids:
+            # Match by SSID interface name and radio (most reliable identifiers)
+            if ssid_data.get("ssid_interface") == original_ssid_info.get(
+                "ssid_interface"
+            ) and ssid_data.get("radio") == original_ssid_info.get("radio"):
+                return ssid_data
+
+        return None
+
+
+class WrtAreaSSIDBinarySensor(CoordinatorEntity, BinarySensorEntity):
+    """Area-specific binary sensor for SSID enabled/disabled status."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        ssid_name: str,
+        area_name: str,
+        area_instances: List[Dict[str, Any]],
+        config_entry: ConfigEntry,
+    ) -> None:
+        """Initialize the area SSID status sensor."""
+        super().__init__(coordinator)
+        self._ssid_name = ssid_name
+        self._area_name = area_name
+        self._area_instances = area_instances
+        self._config_entry = config_entry
+
+        # Create unique entity ID for area SSID
+        safe_ssid = ssid_name.lower().replace(" ", "_").replace("-", "_").replace(".", "_")
+        safe_area = area_name.lower().replace(" ", "_").replace("-", "_").replace(".", "_")
+        self._attr_unique_id = f"wrtmanager_{safe_area}_{safe_ssid}_enabled"
+        self._attr_name = f"{area_name} {ssid_name} SSID"
+        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+        self._attr_icon = "mdi:wifi"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if SSID is enabled on any router in this area."""
+        for instance in self._area_instances:
+            ssid_data = self._get_current_ssid_data(instance["router_host"], instance["ssid_info"])
+            if ssid_data and not ssid_data.get("disabled", False):
+                return True
+        return False
+
+    @property
+    def available(self) -> bool:
+        """Return True if at least one router in this area has this SSID available."""
+        return self.coordinator.last_update_success and any(
+            self._get_current_ssid_data(instance["router_host"], instance["ssid_info"]) is not None
+            for instance in self._area_instances
+        )
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return additional state attributes."""
+        enabled_routers = []
+        disabled_routers = []
+        total_instances = 0
+        frequency_bands = set()
+
+        for instance in self._area_instances:
+            ssid_data = self._get_current_ssid_data(instance["router_host"], instance["ssid_info"])
+            if ssid_data:
+                total_instances += 1
+                router_name = instance["router_name"]
+
+                if ssid_data.get("disabled", False):
+                    disabled_routers.append(router_name)
+                else:
+                    enabled_routers.append(router_name)
+
+                # Collect frequency band info
+                if ssid_data.get("is_consolidated"):
+                    frequency_bands.update(ssid_data.get("frequency_bands", []))
+                else:
+                    radio = ssid_data.get("radio", "")
+                    if "0" in radio:
+                        frequency_bands.add("2.4GHz")
+                    elif "1" in radio:
+                        frequency_bands.add("5GHz")
+
+        attributes = {
+            "ssid_name": self._ssid_name,
+            "area_name": self._area_name,
+            "router_count": len(self._area_instances),
+            "enabled_routers": enabled_routers,
+            "disabled_routers": disabled_routers,
+            "total_instances": total_instances,
+            "frequency_bands": sorted(list(frequency_bands)),
+            "coverage": f"Area: {self._area_name}",
+        }
+
+        # Get common configuration from first available instance
+        for instance in self._area_instances:
+            ssid_data = self._get_current_ssid_data(instance["router_host"], instance["ssid_info"])
+            if ssid_data:
+                attributes.update(
+                    {
+                        "ssid_mode": ssid_data.get("mode", "ap"),
+                        "encryption": ssid_data.get("encryption"),
+                        "hidden": ssid_data.get("hidden", False),
+                        "network_name": ssid_data.get("network"),
+                    }
+                )
+                break
+
+        return {k: v for k, v in attributes.items() if v is not None}
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information for grouping."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"area_{self._area_name}_{self._ssid_name}")},
+            name=f"{self._area_name} {self._ssid_name}",
+            manufacturer="WrtManager",
+            model="Area SSID Controller",
+            suggested_area=self._area_name,
+            via_device=(
+                DOMAIN,
+                self._area_instances[0]["router_host"],
+            ),  # Reference first router in area
+        )
+
+    def _get_current_ssid_data(
+        self, router_host: str, original_ssid_info: Dict[str, Any]
+    ) -> Dict[str, Any] | None:
+        """Get current SSID data from coordinator for specific router."""
+        if not self.coordinator.data or "ssids" not in self.coordinator.data:
+            return None
+
+        router_ssids = self.coordinator.data["ssids"].get(router_host, [])
+
+        for ssid_data in router_ssids:
+            # Match by SSID interface name and radio (most reliable identifiers)
+            if ssid_data.get("ssid_interface") == original_ssid_info.get(
+                "ssid_interface"
+            ) and ssid_data.get("radio") == original_ssid_info.get("radio"):
+                return ssid_data
+
+        return None
 
 
 class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
@@ -422,154 +749,3 @@ class WrtInterfaceStatusSensor(CoordinatorEntity, BinarySensorEntity):
 
         router_interfaces = self.coordinator.data["interfaces"].get(self._router_host, {})
         return router_interfaces.get(self._interface_name)
-
-
-class WrtSSIDBinarySensor(CoordinatorEntity, BinarySensorEntity):
-    """Binary sensor for SSID enabled/disabled status."""
-
-    def __init__(
-        self,
-        coordinator: WrtManagerCoordinator,
-        router_host: str,
-        router_name: str,
-        ssid_info: Dict[str, Any],
-        config_entry: ConfigEntry,
-    ) -> None:
-        """Initialize the SSID status sensor."""
-        super().__init__(coordinator)
-        self._router_host = router_host
-        self._router_name = router_name
-        self._ssid_info = ssid_info
-        self._config_entry = config_entry
-
-        # Create unique entity ID
-        ssid_name = ssid_info.get("ssid_name", "unknown")
-        radio = ssid_info.get("radio", "radio")
-        is_consolidated = ssid_info.get("is_consolidated", False)
-
-        # Create a safe identifier from SSID name
-        safe_ssid = ssid_name.lower().replace(" ", "_").replace("-", "_").replace(".", "_")
-        safe_router = router_host.replace(".", "_").replace("-", "_")
-
-        if is_consolidated:
-            # Consolidated SSID across multiple radios
-            self._attr_unique_id = f"wrtmanager_{safe_router}_{safe_ssid}_enabled"
-            frequency_bands = ssid_info.get("frequency_bands", [])
-            bands_str = " + ".join(frequency_bands) if frequency_bands else "Multi-band"
-            self._attr_name = f"{router_name} {ssid_name} SSID ({bands_str})"
-        else:
-            # Single radio SSID
-            safe_radio = radio.replace("radio", "")
-            self._attr_unique_id = f"wrtmanager_{safe_router}_{safe_radio}_{safe_ssid}_enabled"
-            band = "2.4GHz" if "0" in radio else "5GHz" if "1" in radio else "Unknown"
-            self._attr_name = f"{router_name} {ssid_name} SSID ({band})"
-
-        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-        self._attr_icon = "mdi:wifi"
-
-    @property
-    def is_on(self) -> bool:
-        """Return True if SSID is enabled (not disabled)."""
-        ssid_data = self._get_current_ssid_data()
-        if not ssid_data:
-            return False
-
-        # SSID is "on" (enabled) when disabled = False or None
-        return not ssid_data.get("disabled", False)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.coordinator.last_update_success and self._get_current_ssid_data() is not None
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional state attributes."""
-        ssid_data = self._get_current_ssid_data()
-        if not ssid_data:
-            return {}
-
-        is_consolidated = ssid_data.get("is_consolidated", False)
-
-        attributes = {
-            ATTR_SSID_NAME: ssid_data.get("ssid_name"),
-            ATTR_SSID_MODE: ssid_data.get("mode", "ap"),
-            ATTR_ENCRYPTION: ssid_data.get("encryption"),
-            ATTR_HIDDEN: ssid_data.get("hidden", False),
-            "client_isolation": ssid_data.get("isolate", False),
-            "network_name": ssid_data.get("network"),
-            "is_consolidated": is_consolidated,
-        }
-
-        if is_consolidated:
-            # Consolidated SSID attributes
-            attributes.update(
-                {
-                    "radios": ssid_data.get("radios", []),
-                    "ssid_interfaces": ssid_data.get("ssid_interfaces", []),
-                    "network_interfaces": ssid_data.get("network_interfaces", []),
-                    "radio_count": ssid_data.get("radio_count", 0),
-                    "frequency_bands": ssid_data.get("frequency_bands", []),
-                    "coverage": "Multi-band (consolidated)",
-                }
-            )
-        else:
-            # Single radio SSID attributes
-            attributes.update(
-                {
-                    ATTR_RADIO: ssid_data.get("radio"),
-                    ATTR_SSID_INTERFACE: ssid_data.get("ssid_interface"),
-                    ATTR_NETWORK_INTERFACE: ssid_data.get("network_interface"),
-                }
-            )
-
-            # Add frequency/band info for single radio
-            if ssid_data.get("radio"):
-                radio_name = ssid_data["radio"]
-                if "0" in radio_name:
-                    attributes["frequency_band"] = "2.4GHz"
-                elif "1" in radio_name:
-                    attributes["frequency_band"] = "5GHz"
-                else:
-                    attributes["frequency_band"] = "Unknown"
-
-        # Remove None values
-        return {k: v for k, v in attributes.items() if v is not None}
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information for grouping."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._router_host)},
-            name=self._router_name,
-            manufacturer="OpenWrt",
-            model="Router",
-            configuration_url=f"http://{self._router_host}",
-        )
-
-    def _get_current_ssid_data(self) -> Dict[str, Any] | None:
-        """Get current SSID data from coordinator."""
-        if not self.coordinator.data or "ssids" not in self.coordinator.data:
-            return None
-
-        # Find the SSID in current data that matches our configuration
-        router_ssids = self.coordinator.data["ssids"].get(self._router_host, [])
-
-        for ssid_data in router_ssids:
-            # Match by SSID interface name and radio (most reliable identifiers)
-            if ssid_data.get("ssid_interface") == self._ssid_info.get(
-                "ssid_interface"
-            ) and ssid_data.get("radio") == self._ssid_info.get("radio"):
-                return ssid_data
-
-        return None
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        # Update our stored SSID info with current data
-        current_data = self._get_current_ssid_data()
-        if current_data:
-            self._ssid_info = current_data
-
-        super()._handle_coordinator_update()
