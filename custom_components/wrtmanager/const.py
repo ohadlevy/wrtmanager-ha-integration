@@ -53,7 +53,6 @@ ATTR_NETWORK_INTERFACE = "network_interface"
 # Entity types
 ENTITY_TYPE_DEVICE_PRESENCE = "device_presence"
 ENTITY_TYPE_SIGNAL_STRENGTH = "signal_strength"
-ENTITY_TYPE_DEVICE_TRACKER = "device_tracker"
 
 # VLAN mapping
 VLAN_MAIN = 1
@@ -80,6 +79,7 @@ DEVICE_TYPE_VEHICLE = "Vehicle"
 DEVICE_TYPE_PRINTER = "Printer"
 DEVICE_TYPE_ROBOT_VACUUM = "Robot Vacuum"
 DEVICE_TYPE_NETWORK_EQUIPMENT = "Network Equipment"
+DEVICE_TYPE_BRIDGE = "Network Bridge"
 DEVICE_TYPE_UNKNOWN = "Unknown Device"
 
 # Data sources

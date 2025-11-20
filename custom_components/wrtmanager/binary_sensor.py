@@ -75,6 +75,15 @@ async def async_setup_entry(
             router_interfaces = coordinator.data["interfaces"].get(router_host, {})
 
             for interface_name in router_interfaces:
+                # Filter out interfaces that are not useful for monitoring
+                # Skip radio configuration containers (radio0, radio1, etc.)
+                if interface_name.startswith("radio") and interface_name[5:].isdigit():
+                    continue
+
+                # Skip loopback interface - not useful for network monitoring
+                if interface_name == "lo":
+                    continue
+
                 entities.append(
                     WrtInterfaceStatusSensor(
                         coordinator, router_host, router_name, interface_name, config_entry
@@ -542,17 +551,17 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
         device_name = self._get_device_name(device_data)
 
         # Get router information for better device context
-        router = device_data.get(ATTR_ROUTER) if device_data else self._router_host
+        router_host = device_data.get(ATTR_ROUTER) if device_data else self._router_host
 
         return DeviceInfo(
             identifiers={(DOMAIN, self._mac)},
             name=device_name,
             manufacturer=device_data.get(ATTR_VENDOR) if device_data else "Unknown",
             model=device_data.get(ATTR_DEVICE_TYPE) if device_data else "Network Device",
-            sw_version=f"Connected to {router}" if router else None,
+            sw_version=self._get_device_firmware(device_data),
+            via_device=(DOMAIN, router_host) if router_host else None,
             # Note: No configuration_url for connected devices - they don't have web interfaces
             # Only routers/infrastructure devices should have configuration_url
-            # via_device disabled until router device hierarchy is properly implemented
         )
 
     def _get_device_data(self) -> Dict[str, Any] | None:
@@ -632,6 +641,37 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
         # Final fallback with shorter MAC suffix
         return f"Unknown Device {self._mac[-5:].replace(':', '')}"
 
+    def _get_router_name(self, router_host: str) -> str:
+        """Get friendly router name from host IP."""
+        if not router_host:
+            return "Unknown Router"
+
+        # Look up the router name from the config entry
+        config_routers = self.coordinator.config_entry.data.get("routers", [])
+        for router_config in config_routers:
+            if router_config.get("host") == router_host:
+                return router_config.get("name", router_host)
+
+        # Fallback to IP address if not found in config
+        return router_host
+
+    def _get_device_firmware(self, device_data: Dict[str, Any] | None) -> str | None:
+        """Get device firmware/software version if available."""
+        if not device_data:
+            return None
+
+        # Try to get actual device firmware/OS information
+        # This would come from device fingerprinting or DHCP information
+        # For now, return None to let Home Assistant handle it
+
+        # Future enhancement: Could detect device types and provide meaningful firmware:
+        # - iOS devices: iOS version
+        # - Android devices: Android version
+        # - Windows devices: Windows version
+        # - IoT devices: firmware version if available
+
+        return None
+
 
 class WrtInterfaceStatusSensor(CoordinatorEntity, BinarySensorEntity):
     """Binary sensor for network interface status."""
@@ -655,9 +695,11 @@ class WrtInterfaceStatusSensor(CoordinatorEntity, BinarySensorEntity):
         safe_router = router_host.replace(".", "_").replace("-", "_")
         safe_interface = interface_name.replace(".", "_").replace("-", "_")
         self._attr_unique_id = f"wrtmanager_{safe_router}_{safe_interface}_status"
-        self._attr_name = f"{router_name} {interface_name}"
+
+        # Provide better naming and icons based on interface type
+        self._attr_name = f"{router_name} {self._get_friendly_interface_name(interface_name)}"
         self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-        self._attr_icon = "mdi:ethernet"
+        self._attr_icon = self._get_interface_icon(interface_name)
 
     @property
     def is_on(self) -> bool:
@@ -749,3 +791,72 @@ class WrtInterfaceStatusSensor(CoordinatorEntity, BinarySensorEntity):
 
         router_interfaces = self.coordinator.data["interfaces"].get(self._router_host, {})
         return router_interfaces.get(self._interface_name)
+
+    def _get_friendly_interface_name(self, interface_name: str) -> str:
+        """Get a human-friendly interface name with type description."""
+        lower_name = interface_name.lower()
+
+        # Wireless interfaces (phy#-ap# are the actual wireless interfaces)
+        if "phy" in lower_name and "ap" in lower_name:
+            return f"{interface_name} (WiFi Interface)"
+        elif interface_name.startswith("wlan"):
+            return f"{interface_name} (WiFi)"
+
+        # Ethernet interfaces
+        elif interface_name.startswith("eth"):
+            return f"{interface_name} (Ethernet)"
+
+        # Bridge interfaces
+        elif interface_name.startswith("br-"):
+            bridge_name = interface_name.replace("br-", "").title()
+            return f"{interface_name} ({bridge_name} Bridge)"
+
+        # VLAN interfaces
+        elif "vlan" in lower_name or "." in interface_name:
+            return f"{interface_name} (VLAN)"
+
+        # Loopback
+        elif interface_name == "lo":
+            return f"{interface_name} (Loopback)"
+
+        # Tunnel interfaces
+        elif interface_name.startswith("tun") or interface_name.startswith("tap"):
+            return f"{interface_name} (Tunnel)"
+
+        # Default - just return the interface name
+        else:
+            return interface_name
+
+    def _get_interface_icon(self, interface_name: str) -> str:
+        """Get appropriate icon for interface type."""
+        lower_name = interface_name.lower()
+
+        # Wireless interfaces
+        if "phy" in lower_name and "ap" in lower_name:
+            return "mdi:wifi"
+        elif interface_name.startswith("wlan"):
+            return "mdi:wifi"
+
+        # Ethernet interfaces
+        elif interface_name.startswith("eth"):
+            return "mdi:ethernet"
+
+        # Bridge interfaces
+        elif interface_name.startswith("br-"):
+            return "mdi:bridge"
+
+        # VLAN interfaces
+        elif "vlan" in lower_name or "." in interface_name:
+            return "mdi:network"
+
+        # Loopback
+        elif interface_name == "lo":
+            return "mdi:looping"
+
+        # Tunnel interfaces
+        elif interface_name.startswith("tun") or interface_name.startswith("tap"):
+            return "mdi:tunnel"
+
+        # Default
+        else:
+            return "mdi:ethernet"

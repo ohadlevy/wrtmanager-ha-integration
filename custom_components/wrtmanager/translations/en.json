@@ -71,11 +71,6 @@
       "network_summary": {
         "name": "Network Summary"
       }
-    },
-    "device_tracker": {
-      "device": {
-        "name": "{device_name}"
-      }
     }
   }
 }

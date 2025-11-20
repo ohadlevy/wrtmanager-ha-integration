@@ -18,7 +18,6 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SENSOR,
-    # Platform.DEVICE_TRACKER,  # Removed - duplicate functionality with binary presence sensors
 ]
 
 SCAN_INTERVAL = timedelta(seconds=30)

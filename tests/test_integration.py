@@ -167,11 +167,9 @@ class TestWrtManagerIntegration:
             WrtManagerDeviceCountSensor,
             WrtManagerInterfaceDeviceCountSensor,
             WrtManagerMemoryUsageSensor,
-            WrtManagerUptimeSensor,
             async_setup_entry,
         )
 
-        assert WrtManagerUptimeSensor is not None
         assert WrtManagerMemoryUsageSensor is not None
         assert WrtManagerDeviceCountSensor is not None
         assert WrtManagerInterfaceDeviceCountSensor is not None

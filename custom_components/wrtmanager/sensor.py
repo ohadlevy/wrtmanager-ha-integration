@@ -37,6 +37,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    ATTR_DEVICE_TYPE,
     ATTR_HOSTNAME,
     ATTR_INTERFACE,
     ATTR_MAC,
@@ -76,13 +77,16 @@ async def async_setup_entry(
         # System monitoring sensors (create for each router)
         entities.extend(
             [
-                WrtManagerUptimeSensor(coordinator, router_host, router_name),
                 WrtManagerMemoryUsageSensor(coordinator, router_host, router_name),
                 WrtManagerMemoryFreeSensor(coordinator, router_host, router_name),
-                WrtManagerLoadAverageSensor(coordinator, router_host, router_name),
-                WrtManagerTemperatureSensor(coordinator, router_host, router_name),
             ]
         )
+
+        # Only add temperature sensor if router provides temperature data
+        if coordinator.data and "system_info" in coordinator.data:
+            system_data = coordinator.data["system_info"].get(router_host, {})
+            if system_data.get("temperature") is not None:
+                entities.append(WrtManagerTemperatureSensor(coordinator, router_host, router_name))
         _LOGGER.info("Created system monitoring sensors for %s", router_name)
 
         # Interface binary sensors are now in binary_sensor.py for better UX
@@ -152,7 +156,7 @@ class WrtManagerSensorBase(CoordinatorEntity[WrtManagerCoordinator], SensorEntit
             name=self._router_name,
             manufacturer="OpenWrt",
             model=system_data.get("model", "Unknown"),
-            sw_version=system_data.get("kernel", "Unknown"),
+            sw_version=self._get_openwrt_version(system_data),
             configuration_url=f"http://{self._router_host}",
         )
 
@@ -162,45 +166,26 @@ class WrtManagerSensorBase(CoordinatorEntity[WrtManagerCoordinator], SensorEntit
             return {}
         return self.coordinator.data["system_info"].get(self._router_host, {})
 
+    def _get_openwrt_version(self, system_data: Dict[str, Any]) -> str:
+        """Get OpenWrt version from system data, fallback to kernel version."""
+        release_info = system_data.get("release", {})
+
+        # Try to get OpenWrt version first
+        openwrt_version = release_info.get("version")
+        if openwrt_version:
+            return openwrt_version
+
+        # Fallback to kernel version if OpenWrt version is not available
+        kernel_version = system_data.get("kernel")
+        if kernel_version:
+            return f"Kernel {kernel_version}"
+
+        return "Unknown"
+
     @property
     def available(self) -> bool:
         """Return if entity is available."""
         return self.coordinator.last_update_success and bool(self._get_system_data())
-
-
-class WrtManagerUptimeSensor(WrtManagerSensorBase):
-    """Sensor for router uptime."""
-
-    def __init__(self, coordinator: WrtManagerCoordinator, router_host: str, router_name: str):
-        """Initialize the uptime sensor."""
-        super().__init__(coordinator, router_host, router_name, "uptime", "Uptime")
-        self._attr_device_class = SensorDeviceClass.DURATION
-        self._attr_native_unit_of_measurement = UNIT_SECONDS
-        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-
-    @property
-    def native_value(self) -> Optional[int]:
-        """Return the uptime in seconds."""
-        system_data = self._get_system_data()
-        return system_data.get("uptime")
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional state attributes."""
-        system_data = self._get_system_data()
-        uptime_seconds = system_data.get("uptime")
-
-        if uptime_seconds:
-            uptime_delta = timedelta(seconds=uptime_seconds)
-            boot_time = datetime.now() - uptime_delta
-
-            return {
-                "uptime_formatted": str(uptime_delta),
-                "boot_time": boot_time.isoformat(),
-                "days": uptime_delta.days,
-                "hours": uptime_delta.seconds // 3600,
-            }
-        return {}
 
 
 class WrtManagerMemoryUsageSensor(WrtManagerSensorBase):
@@ -233,13 +218,16 @@ class WrtManagerMemoryUsageSensor(WrtManagerSensorBase):
         system_data = self._get_system_data()
         memory_data = system_data.get("memory", {})
 
+        # OpenWrt returns memory values in bytes, convert to MB
         return {
-            "total_mb": round(memory_data.get("total", 0) / 1024, 1),
-            "free_mb": round(memory_data.get("free", 0) / 1024, 1),
-            "used_mb": round((memory_data.get("total", 0) - memory_data.get("free", 0)) / 1024, 1),
-            "available_mb": round(memory_data.get("available", 0) / 1024, 1),
-            "buffers_mb": round(memory_data.get("buffers", 0) / 1024, 1),
-            "cached_mb": round(memory_data.get("cached", 0) / 1024, 1),
+            "total_mb": round(memory_data.get("total", 0) / (1024 * 1024), 1),
+            "free_mb": round(memory_data.get("free", 0) / (1024 * 1024), 1),
+            "used_mb": round(
+                (memory_data.get("total", 0) - memory_data.get("free", 0)) / (1024 * 1024), 1
+            ),
+            "available_mb": round(memory_data.get("available", 0) / (1024 * 1024), 1),
+            "buffers_mb": round(memory_data.get("buffers", 0) / (1024 * 1024), 1),
+            "cached_mb": round(memory_data.get("cached", 0) / (1024 * 1024), 1),
         }
 
 
@@ -259,48 +247,12 @@ class WrtManagerMemoryFreeSensor(WrtManagerSensorBase):
         """Return free memory in MB."""
         system_data = self._get_system_data()
         memory_data = system_data.get("memory", {})
-        free_kb = memory_data.get("free")
+        free_bytes = memory_data.get("free")
 
-        if free_kb:
-            return round(free_kb / 1024, 1)
+        if free_bytes:
+            # OpenWrt returns memory in bytes, convert to MB
+            return round(free_bytes / (1024 * 1024), 1)
         return None
-
-
-class WrtManagerLoadAverageSensor(WrtManagerSensorBase):
-    """Sensor for system load average."""
-
-    def __init__(self, coordinator: WrtManagerCoordinator, router_host: str, router_name: str):
-        """Initialize the load average sensor."""
-        super().__init__(coordinator, router_host, router_name, "load_avg", "Load Average")
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:chip"
-
-    @property
-    def native_value(self) -> Optional[float]:
-        """Return 1-minute load average."""
-        system_data = self._get_system_data()
-        load_data = system_data.get("load", [])
-
-        if load_data and len(load_data) >= 1:
-            return round(load_data[0], 2)
-        return None
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return load average details."""
-        system_data = self._get_system_data()
-        load_data = system_data.get("load", [])
-
-        attributes = {}
-        if len(load_data) >= 3:
-            attributes.update(
-                {
-                    "load_1min": round(load_data[0], 2),
-                    "load_5min": round(load_data[1], 2),
-                    "load_15min": round(load_data[2], 2),
-                }
-            )
-        return attributes
 
 
 class WrtManagerTemperatureSensor(WrtManagerSensorBase):
@@ -367,22 +319,33 @@ class WrtManagerDeviceCountSensor(WrtManagerSensorBase):
         # Merge custom names with defaults
         vlan_names = {**VLAN_NAMES, **custom_vlan_names}
 
-        # Count devices by VLAN
+        # Count devices by VLAN and device type
         vlan_counts = {}
+        device_type_counts = {}
 
         for device in self.coordinator.data["devices"]:
             if device.get(ATTR_ROUTER) == self._router_host:
+                # Count by VLAN
                 vlan_id = device.get(ATTR_VLAN_ID, 1)
                 vlan_name = vlan_names.get(vlan_id, f"VLAN {vlan_id}")
-
-                # Create a safe key for the attribute
                 vlan_key = vlan_name.lower().replace(" ", "_").replace("-", "_")
                 vlan_counts[vlan_key] = vlan_counts.get(vlan_key, 0) + 1
 
-        # Create dynamic attributes based on actual VLANs found
+                # Count by device type for categorization
+                device_type = device.get(ATTR_DEVICE_TYPE, "Unknown Device")
+                type_key = device_type.lower().replace(" ", "_").replace("-", "_")
+                device_type_counts[type_key] = device_type_counts.get(type_key, 0) + 1
+
+        # Create dynamic attributes based on actual VLANs and device types found
         attributes = {}
+
+        # Add VLAN breakdown
         for vlan_key, count in vlan_counts.items():
             attributes[f"{vlan_key}_devices"] = count
+
+        # Add device type categorization breakdown
+        for type_key, count in device_type_counts.items():
+            attributes[f"{type_key}_count"] = count
 
         # Add total if we have multiple VLANs
         if len(vlan_counts) > 1:
@@ -447,6 +410,7 @@ class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
         interface_devices = []
         signal_readings = []
         vlan_counts = {}
+        device_type_counts = {}
 
         for device in self.coordinator.data["devices"]:
             if (
@@ -466,6 +430,12 @@ class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
                 vlan_key = vlan_name.lower().replace(" ", "_").replace("-", "_")
                 vlan_counts[vlan_key] = vlan_counts.get(vlan_key, 0) + 1
 
+                # Count by device type for categorization
+                device_type = device.get(ATTR_DEVICE_TYPE, "Unknown Device")
+                # Create a clean key for device type counting
+                type_key = device_type.lower().replace(" ", "_").replace("-", "_")
+                device_type_counts[type_key] = device_type_counts.get(type_key, 0) + 1
+
         attributes = {
             "interface": self._interface,
             "router": self._router_name,
@@ -476,6 +446,12 @@ class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
         if vlan_counts:
             attributes.update(
                 {f"{vlan_key}_devices": count for vlan_key, count in vlan_counts.items()}
+            )
+
+        # Add device type categorization breakdown
+        if device_type_counts:
+            attributes.update(
+                {f"{type_key}_count": count for type_key, count in device_type_counts.items()}
             )
 
         # Add signal statistics if available

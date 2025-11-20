@@ -10,6 +10,7 @@ import aiofiles
 import aiohttp
 
 from .const import (
+    DEVICE_TYPE_BRIDGE,
     DEVICE_TYPE_COMPUTER,
     DEVICE_TYPE_HOME_APPLIANCE,
     DEVICE_TYPE_IOT_SWITCH,
@@ -195,6 +196,17 @@ class DeviceManager:
         ):
             return DEVICE_TYPE_HOME_APPLIANCE
 
+        # Network bridges (specific bridge devices)
+        if any(
+            keyword in vendor_lower
+            for keyword in [
+                "bridge",
+                "hub",
+                "switch",
+            ]
+        ):
+            return DEVICE_TYPE_BRIDGE
+
         # Network equipment
         if any(
             keyword in vendor_lower
@@ -239,6 +251,8 @@ class DeviceManager:
             return f"{vendor} Vacuum-{mac_suffix}"
         elif device_type == DEVICE_TYPE_NETWORK_EQUIPMENT:
             return f"{vendor} Network-{mac_suffix}"
+        elif device_type == DEVICE_TYPE_BRIDGE:
+            return f"{vendor} Bridge-{mac_suffix}"
         else:
             return f"{vendor} Device-{mac_suffix}"
 
