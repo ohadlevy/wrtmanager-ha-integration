@@ -270,7 +270,6 @@ class UbusClient:
             if self.use_https and not self.verify_ssl:
                 # Disable SSL verification for self-signed certificates
                 import functools
-                import ssl
 
                 # Create SSL context in executor to avoid blocking the event loop
                 loop = asyncio.get_event_loop()
