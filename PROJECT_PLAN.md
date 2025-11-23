@@ -69,85 +69,84 @@ From previous development, we have these working components:
 - [x] Set up testing framework (dev environment with HA container)
 - [x] Create documentation structure
 
-### Phase 2: Core Integration Development (Week 3-6) ✅ MOSTLY COMPLETED
+### Phase 2: Core Integration Development (Week 3-6) ✅ COMPLETED
 - [x] Config flow for router setup
 - [x] DataUpdateCoordinator implementation
-- [x] HTTP ubus client library
+- [x] HTTP ubus client library with HTTPS support
 - [x] Basic device entities (binary_sensors for presence)
 - [x] **Roaming device correlation logic**
 - [x] Error handling and logging
 - [x] Multi-router parallel data collection
 - [x] Device identification with MAC OUI database
-- [x] System monitoring sensors (uptime, memory, load, temperature)
+- [x] Comprehensive test suite (67+ test functions, 2500+ lines)
 
-### Phase 3: VLAN Management & Enhanced Features (Week 7-10) ✅ COMPLETED
-- [x] VLAN-based device organization (working in HA)
-- [x] Advanced device entities (signal, rates, device counts) (working in HA)
-- [x] **Roaming pattern tracking** (working in HA)
-- [x] **Best signal AP detection** (working in HA)
-- [x] Device registry integration (working in HA)
-- [x] Performance optimization for multi-AP setups (working in HA)
-- [x] VLAN customization UI (options flow) (working in HA)
-- [x] Enhanced device naming and vendor identification (working in HA)
-- [x] Interface status monitoring (network interfaces binary sensors) (working in HA)
-- [x] **SSID Discovery & Auto-Detection** ✅ **WORKING** - Comprehensive wireless status parsing
-- [x] **SSID Binary Sensors with Smart Consolidation** ✅ **WORKING** - Multi-band SSIDs unified into single entities
-- [x] **Per-Interface Device Counting** ✅ **WORKING** - Device counts per wireless interface/SSID
+### Phase 3: VLAN Management & Core Features (Week 7-10) ✅ COMPLETED
+- [x] VLAN-based device organization
+- [x] **Roaming pattern tracking**
+- [x] **Best signal AP detection**
+- [x] Device registry integration
+- [x] Performance optimization for multi-AP setups
+- [x] VLAN customization UI (options flow)
+- [x] Enhanced device naming and vendor identification
+- [x] Interface status monitoring (network interfaces binary sensors)
+- [x] **SSID Discovery & Auto-Detection** - Comprehensive wireless status parsing
+- [x] **SSID Binary Sensors with Smart Consolidation** - Multi-band SSIDs unified into single entities
+- [x] **Area-based SSID Grouping** - Home Assistant Areas/Floors integration
+- [x] **Per-Interface Device Counting** - Device counts per wireless interface/SSID
 
-### Phase 4: Polish & Release (Week 11-12)
-- [ ] Complete documentation
-- [ ] HACS submission preparation
-- [ ] Community announcement
-- [ ] v1.0.0 release
+## Current Status: v0.8 - Core Complete, User Experience Incomplete
 
-## Current Focus: Testing & Validation
-
-### Phase 1: Integration Testing & Quality Assurance
-- [ ] **Add comprehensive Home Assistant integration tests**
-  - [ ] Test SSID discovery and parsing logic
-  - [ ] Test binary sensor entity creation and state updates
-  - [ ] Test import error handling and dependency management
-  - [ ] Test coordinator data flow and error scenarios
-- [ ] **Add SSID consolidation validation tests**
-  - [ ] Test multi-radio SSID consolidation logic
-  - [ ] Test frequency band detection and naming
-  - [ ] Test consolidated vs single-radio SSID attributes
-  - [ ] Test SSID binary sensor functionality with real data
-- [ ] **Validate SSID binary sensor functionality in Home Assistant**
-  - [ ] Test SSID enable/disable state detection
-  - [ ] Verify consolidated SSID entity naming and attributes
-  - [ ] Test error handling for wireless status parsing failures
-
-#### Phase 2: SSID Monitoring & Analytics
-- [ ] **SSID performance monitoring**
-  - [ ] Signal quality statistics per SSID
+### Phase 4: Enhanced Sensors & Analytics (Current Focus)
+- [ ] **Advanced sensor entities**
+  - [ ] Signal strength sensors (currently only attributes)
+  - [ ] Roaming count sensors
+  - [ ] Network summary sensors (bandwidth, performance)
+  - [ ] Device tracker entities (location-based presence)
+- [ ] **Performance monitoring**
+  - [ ] Signal quality statistics per device/SSID
   - [ ] Connection/disconnection event tracking
   - [ ] Peak usage time analytics
+  - [ ] Network health indicators
+- [ ] **Enhanced device analytics**
   - [ ] Device roaming patterns between SSIDs
-- [ ] **Real-time SSID events**
-  - [ ] New device connections to specific SSIDs
-  - [ ] SSID enable/disable notifications
-  - [ ] Unusual activity alerts (mass connections, etc.)
+  - [ ] Historical connection data
+  - [ ] Bandwidth usage per device (if available)
 
-#### Phase 3: SSID Management Services
-- [ ] **SSID control services** (Post SSID monitoring working)
-  - [ ] Enable/disable SSID service calls
-  - [ ] Temporary SSID activation (guest access)
-  - [ ] SSID configuration validation
-- [ ] **Guest network automation**
-  - [ ] Automatic guest SSID activation/deactivation
-  - [ ] Time-based guest access scheduling
-  - [ ] Guest device approval workflows
+### Phase 5: Dashboards & Visualization
+- [ ] **Pre-built Lovelace dashboards**
+  - [ ] Network topology dashboard
+  - [ ] Device management dashboard
+  - [ ] Performance analytics dashboard
+  - [ ] SSID management dashboard
+- [ ] **Custom dashboard cards**
+  - [ ] Network map card showing APs and devices
+  - [ ] Signal strength visualization card
+  - [ ] Device roaming history card
+- [ ] **Documentation & Examples**
+  - [ ] Dashboard configuration examples
+  - [ ] Automation examples
+  - [ ] Best practices guide
 
-#### Phase 4: Advanced SSID Features
-- [ ] **SSID-based device management**
+### Phase 6: Advanced Management Features
+- [ ] **Device control services**
   - [ ] Block/unblock devices per SSID
   - [ ] Move devices between SSIDs/VLANs
-  - [ ] Device access history by SSID
-- [ ] **SSID optimization**
+  - [ ] Device access history and audit log
+- [ ] **Guest network automation**
+  - [ ] Temporary SSID activation (guest access)
+  - [ ] Time-based guest access scheduling
+  - [ ] Guest device approval workflows
+- [ ] **Network optimization**
   - [ ] Load balancing recommendations
   - [ ] Optimal SSID placement analysis
   - [ ] Interference detection and mitigation
+
+### Phase 7: Polish & Release (v1.0)
+- [ ] Complete user documentation
+- [ ] Dashboard examples and templates
+- [ ] HACS submission preparation
+- [ ] Community announcement
+- [ ] v1.0.0 release
 
 ### Technical Implementation Notes
 
@@ -172,14 +171,19 @@ SSID Consolidation Logic
 - **Device Counting**: ✅ Working - Per-interface device count sensors
 - **Error Handling**: ✅ Working - Graceful handling of dump AP mode and permission issues
 
-## Future Management Features (Post v1.0)
-- Device disconnection/blocking
-- Guest network management
-- Device approval workflows
-- VLAN reassignment
-- **Firmware lifecycle tracking and notifications**
-- Roaming optimization insights
-- Network performance analytics
+## Post v1.0 Roadmap (Future Versions)
+- **v1.1 - Enhanced Management**
+  - Device disconnection/blocking
+  - Guest network management
+  - Bandwidth monitoring per device
+- **v1.2 - Automation Features**
+  - Device approval workflows
+  - New device notifications
+  - VLAN assignment automation
+- **v1.3 - Advanced Analytics**
+  - Network topology mapping
+  - Performance analytics dashboard
+  - Firmware update notifications
 
 ## Key Technical Decisions
 
@@ -274,6 +278,6 @@ custom_components/wrtmanager/
 
 ---
 
-*Last updated: 2024-11-17*
-*Context: This preserves our research and decisions to prevent loss during development*
+*Last updated: 2025-11-23*
+*Status: v0.8 - Core functionality complete, working on user experience features*
 *Network: IEEE 802.11r roaming setup with ethernet-connected APs and VLAN segmentation*

@@ -2,6 +2,8 @@
 
 A comprehensive Home Assistant integration for managing OpenWrt networks with advanced features like VLAN organization, roaming detection, and device management.
 
+> **Current Status (v0.8):** Core functionality is stable and working. Device presence tracking, SSID monitoring, and multi-router support are fully functional. Dashboard templates and advanced sensors are in development for v1.0.
+
 ## Features
 
 ### 🏠 Network Management
@@ -108,14 +110,16 @@ Automatically identifies and categorizes:
   - State: Connected/Disconnected
   - Attributes: IP, MAC, vendor, signal strength, VLAN, roaming info
 
-### Sensors (Future)
-- **Signal Strength**: Real-time signal quality monitoring
-- **Roaming Count**: Track device movement between APs
-- **Network Summary**: Overall network statistics
+### Sensors
+- **System Monitoring**: Router uptime, memory usage, load average, temperature
+- **Network Statistics**: Device counts per VLAN and interface
+- **SSID Status**: Binary sensors for SSID enabled/disabled state per router/area
 
-### Device Tracker (Future)
-- **Location Tracking**: Determine which AP/area device is connected to
-- **Presence Detection**: Enhanced presence with location context
+### Future Sensors (v1.0+)
+- **Signal Strength**: Real-time signal quality monitoring (currently available as attributes)
+- **Roaming Count**: Track device movement between APs
+- **Network Summary**: Overall network statistics and performance metrics
+- **Device Tracker**: Location-based presence detection
 
 ## Configuration
 
@@ -217,6 +221,12 @@ ruby validate_http_ubus.rb ../config/router_config.yml
 ```
 
 ## Roadmap
+
+### v1.0 - Complete User Experience (In Progress)
+- [ ] Advanced sensor entities (signal strength, roaming counts)
+- [ ] Pre-built Lovelace dashboards
+- [ ] Network topology visualization
+- [ ] Performance analytics and monitoring
 
 ### v1.1 - Enhanced Management
 - [ ] Device disconnection/blocking

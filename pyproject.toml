@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wrtmanager-ha-integration"
-version = "1.0.0"
+version = "0.8.0"
 description = "OpenWrt network management integration for Home Assistant"
 authors = [{name = "Ohad Levy", email = "ohadlevy@users.noreply.github.com"}]
 license = {text = "MIT"}
