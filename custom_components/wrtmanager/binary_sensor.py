@@ -389,12 +389,23 @@ class WrtGlobalSSIDBinarySensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping."""
+        # Check if first router device exists before using it as via_device
+        via_device_id = None
+        if self._ssid_group.get("routers"):
+            first_router_host = self._ssid_group["routers"][0]
+            device_registry = dr.async_get(self.hass)
+            router_device = device_registry.async_get_device(
+                identifiers={(DOMAIN, first_router_host)}
+            )
+            if router_device:
+                via_device_id = (DOMAIN, first_router_host)
+
         return DeviceInfo(
             identifiers={(DOMAIN, f"global_ssid_{self._ssid_name}")},
             name=f"Global {self._ssid_name}",
             manufacturer="WrtManager",
             model="Global SSID Controller",
-            via_device=(DOMAIN, self._ssid_group["routers"][0]),  # Reference first router
+            via_device=via_device_id,
         )
 
     def _get_current_ssid_data(
@@ -580,16 +591,24 @@ class WrtAreaSSIDBinarySensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping."""
+        # Check if first router device exists before using it as via_device
+        via_device_id = None
+        if self._area_instances:
+            first_router_host = self._area_instances[0]["router_host"]
+            device_registry = dr.async_get(self.hass)
+            router_device = device_registry.async_get_device(
+                identifiers={(DOMAIN, first_router_host)}
+            )
+            if router_device:
+                via_device_id = (DOMAIN, first_router_host)
+
         return DeviceInfo(
             identifiers={(DOMAIN, f"area_{self._area_name}_{self._ssid_name}")},
             name=f"{self._area_name} {self._ssid_name}",
             manufacturer="WrtManager",
             model="Area SSID Controller",
             suggested_area=self._area_name,
-            via_device=(
-                DOMAIN,
-                self._area_instances[0]["router_host"],
-            ),  # Reference first router in area
+            via_device=via_device_id,
         )
 
     def _get_current_ssid_data(
@@ -638,7 +657,10 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
         device_data = self._get_device_data()
         device_name = self._get_device_name(device_data)
 
-        self._attr_unique_id = f"{DOMAIN}_{mac.lower().replace(':', '_')}_presence"
+        # Include router host in unique ID to avoid conflicts when same
+        # device connects to different routers
+        router_id = self._router_host.replace(".", "_") if self._router_host else "unknown"
+        self._attr_unique_id = f"{DOMAIN}_{router_id}_{mac.lower().replace(':', '_')}_presence"
         self._attr_name = f"{device_name} Presence"
         self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
 
@@ -717,13 +739,26 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
         # Get router information for better device context
         router_host = device_data.get(ATTR_ROUTER) if device_data else self._router_host
 
+        # Check if router device exists before using it as via_device
+        via_device_id = None
+        if router_host:
+            device_registry = dr.async_get(self.hass)
+            router_device = device_registry.async_get_device(identifiers={(DOMAIN, router_host)})
+            if router_device:
+                via_device_id = (DOMAIN, router_host)
+            else:
+                _LOGGER.debug(
+                    "Router device %s not found in device registry, skipping via_device",
+                    router_host,
+                )
+
         return DeviceInfo(
             identifiers={(DOMAIN, self._mac)},
             name=device_name,
             manufacturer=device_data.get(ATTR_VENDOR) if device_data else "Unknown",
             model=device_data.get(ATTR_DEVICE_TYPE) if device_data else "Network Device",
             sw_version=self._get_device_firmware(device_data),
-            via_device=(DOMAIN, router_host) if router_host else None,
+            via_device=via_device_id,
             # Note: No configuration_url for connected devices - they don't have web interfaces
             # Only routers/infrastructure devices should have configuration_url
         )

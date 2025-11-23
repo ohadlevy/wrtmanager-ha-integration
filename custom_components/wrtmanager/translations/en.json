@@ -42,13 +42,47 @@
     "step": {
       "init": {
         "title": "WrtManager Options",
-        "description": "Configure WrtManager settings",
+        "description": "{description}",
         "data": {
-          "scan_interval": "Scan Interval (seconds)",
-          "enable_roaming_detection": "Enable Roaming Detection",
-          "signal_threshold": "Signal Quality Threshold (dBm)"
+          "action": "Configuration Option"
+        }
+      },
+      "vlan_names": {
+        "title": "Customize VLAN Names",
+        "description": "{description}",
+        "data": {
+          "vlan_1": "VLAN 1 Name",
+          "vlan_2": "VLAN 2 Name",
+          "vlan_3": "VLAN 3 Name",
+          "vlan_10": "VLAN 10 Name",
+          "vlan_13": "VLAN 13 Name",
+          "vlan_20": "VLAN 20 Name",
+          "vlan_100": "VLAN 100 Name"
+        }
+      },
+      "select_router": {
+        "title": "Select Router",
+        "description": "{description}",
+        "data": {
+          "router": "Router"
+        }
+      },
+      "update_credentials": {
+        "title": "Update Router Credentials",
+        "description": "Update credentials for {router_name} ({router_host})",
+        "data": {
+          "username": "Username",
+          "password": "New Password"
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the router with new credentials. Please check the hostname/IP address and ensure the router is accessible.",
+      "invalid_auth": "Invalid authentication credentials. Please check the username and password.",
+      "unknown": "Unexpected error occurred while updating credentials."
+    },
+    "abort": {
+      "no_routers_configured": "No routers are configured. Please add a router first."
     }
   },
   "entity": {

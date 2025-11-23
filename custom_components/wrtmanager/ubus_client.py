@@ -69,13 +69,68 @@ class UbusClient:
 
         try:
             response_data = await self._make_request(login_request)
-            session_id = response_data.get("result", [None, {}])[1].get("ubus_rpc_session")
+            _LOGGER.debug("Authentication response for %s: %s", self.host, response_data)
+
+            result = response_data.get("result", [])
+            if not isinstance(result, list) or len(result) == 0:
+                _LOGGER.error(
+                    "Unexpected authentication response format for %s: %s", self.host, response_data
+                )
+                raise UbusAuthenticationError(
+                    f"Invalid response format: expected list with elements, got {result}"
+                )
+
+            # Handle different ubus response formats
+            if len(result) == 1:
+                # Single element response is usually an error code
+                error_code = result[0]
+                error_messages = {
+                    1: "Invalid command",
+                    2: "Invalid argument",
+                    3: "Method not found",
+                    4: "Not found",
+                    5: "No data",
+                    6: "Permission denied - check username/password and ACL permissions",
+                    7: "Timeout",
+                    8: "Not supported",
+                }
+                error_msg = error_messages.get(error_code, f"Unknown error code {error_code}")
+                _LOGGER.error(
+                    "Authentication failed for %s: %s (error code %s)",
+                    self.host,
+                    error_msg,
+                    error_code,
+                )
+                raise UbusAuthenticationError(f"Authentication failed: {error_msg}")
+
+            elif len(result) >= 2:
+                # Standard ubus response: [status_code, data]
+                status_code, auth_data = result[0], result[1]
+
+                if status_code != 0:
+                    _LOGGER.error(
+                        "Authentication failed for %s with status code %s", self.host, status_code
+                    )
+                    raise UbusAuthenticationError(
+                        f"Authentication failed with status code {status_code}"
+                    )
+
+                if not isinstance(auth_data, dict):
+                    _LOGGER.error(
+                        "Authentication data is not a dictionary for %s: %s", self.host, auth_data
+                    )
+                    raise UbusAuthenticationError(f"Invalid auth data format: {auth_data}")
+
+                session_id = auth_data.get("ubus_rpc_session")
+            else:
+                _LOGGER.error("Unexpected result length for %s: %s", self.host, result)
+                raise UbusAuthenticationError(f"Unexpected response format: {result}")
 
             if session_id:
                 _LOGGER.debug("Successfully authenticated with %s", self.host)
                 return session_id
             else:
-                _LOGGER.error("Authentication failed for %s", self.host)
+                _LOGGER.error("Authentication failed for %s: No session ID in response", self.host)
                 raise UbusAuthenticationError("No session ID returned")
 
         except Exception as ex:
@@ -176,6 +231,15 @@ class UbusClient:
         result = await self.call_ubus(session_id, "system", "info", {})
         return result if result else None
 
+    def _create_ssl_context(self):
+        """Create SSL context in a thread-safe manner."""
+        import ssl
+
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        return ssl_context
+
     async def _make_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Make HTTP/HTTPS request to ubus endpoint."""
         if not self._session:
@@ -183,11 +247,14 @@ class UbusClient:
             ssl_context = None
             if self.use_https and not self.verify_ssl:
                 # Disable SSL verification for self-signed certificates
+                import functools
                 import ssl
 
-                ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
+                # Create SSL context in executor to avoid blocking the event loop
+                loop = asyncio.get_event_loop()
+                ssl_context = await loop.run_in_executor(
+                    None, functools.partial(self._create_ssl_context)
+                )
 
             connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
             self._session = aiohttp.ClientSession(connector=connector)

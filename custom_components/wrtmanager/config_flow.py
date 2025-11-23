@@ -18,7 +18,11 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_ROUTER_DESCRIPTION,
+    CONF_ROUTER_HOST,
+    CONF_ROUTER_NAME,
+    CONF_ROUTER_PASSWORD,
     CONF_ROUTER_USE_HTTPS,
+    CONF_ROUTER_USERNAME,
     CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
     CONF_VLAN_NAMES,
@@ -279,10 +283,42 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        super().__init__()
+        self._config_entry = config_entry
+        self.selected_router_index: int | None = None
+
+    @property
+    def config_entry(self) -> config_entries.ConfigEntry:
+        """Return the config entry."""
+        return self._config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
+        if user_input is not None:
+            action = user_input.get("action")
+            if action == "vlan_names":
+                return await self.async_step_vlan_names()
+            elif action == "router_credentials":
+                return await self.async_step_select_router()
+
+        # Create main options menu
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action"): vol.In(
+                        {
+                            "vlan_names": "Customize VLAN Names",
+                            "router_credentials": "Update Router Credentials",
+                        }
+                    )
+                }
+            ),
+            description_placeholders={"description": "Choose what you want to configure:"},
+        )
+
+    async def async_step_vlan_names(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Configure VLAN names."""
         if user_input is not None:
             # Transform input into proper VLAN names dictionary
             vlan_names = {}
@@ -291,8 +327,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vlan_id = int(key.replace("vlan_", ""))
                     vlan_names[vlan_id] = value.strip()
 
-            # Save the custom VLAN names
-            return self.async_create_entry(title="", data={CONF_VLAN_NAMES: vlan_names})
+            # Preserve existing options and update VLAN names
+            new_options = dict(self.config_entry.options)
+            new_options[CONF_VLAN_NAMES] = vlan_names
+
+            return self.async_create_entry(title="", data=new_options)
 
         # Get current VLAN names from options or use defaults
         current_vlan_names = self.config_entry.options.get(CONF_VLAN_NAMES, {})
@@ -311,10 +350,119 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         )
 
         return self.async_show_form(
-            step_id="init",
+            step_id="vlan_names",
             data_schema=options_schema,
             description_placeholders={
                 "description": "Customize VLAN names that will be displayed in Home Assistant. "
                 "These names will be used in device attributes and sensor breakdowns."
+            },
+        )
+
+    async def async_step_select_router(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select router to update credentials for."""
+        routers = self.config_entry.data.get(CONF_ROUTERS, [])
+
+        if not routers:
+            return self.async_abort(reason="no_routers_configured")
+
+        if len(routers) == 1:
+            # Only one router, skip selection step
+            self.selected_router_index = 0
+            return await self.async_step_update_credentials()
+
+        if user_input is not None:
+            self.selected_router_index = int(user_input["router"])
+            return await self.async_step_update_credentials()
+
+        # Create router selection schema
+        router_options = {
+            str(i): f"{router[CONF_ROUTER_NAME]} ({router[CONF_ROUTER_HOST]})"
+            for i, router in enumerate(routers)
+        }
+
+        return self.async_show_form(
+            step_id="select_router",
+            data_schema=vol.Schema({vol.Required("router"): vol.In(router_options)}),
+            description_placeholders={
+                "description": "Select the router you want to update credentials for:"
+            },
+        )
+
+    async def async_step_update_credentials(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Update router credentials."""
+        errors = {}
+
+        if user_input is not None:
+            routers = list(self.config_entry.data[CONF_ROUTERS])
+            current_router = routers[self.selected_router_index]
+
+            # Create updated router config
+            updated_router = dict(current_router)
+            updated_router[CONF_ROUTER_USERNAME] = user_input[CONF_ROUTER_USERNAME]
+            updated_router[CONF_ROUTER_PASSWORD] = user_input[CONF_ROUTER_PASSWORD]
+
+            # Validate new credentials
+            try:
+                await validate_router_connection(
+                    self.hass,
+                    {
+                        CONF_HOST: current_router[CONF_ROUTER_HOST],
+                        CONF_NAME: current_router[CONF_ROUTER_NAME],
+                        CONF_USERNAME: user_input[CONF_ROUTER_USERNAME],
+                        CONF_PASSWORD: user_input[CONF_ROUTER_PASSWORD],
+                        CONF_ROUTER_USE_HTTPS: current_router.get(
+                            CONF_ROUTER_USE_HTTPS, DEFAULT_USE_HTTPS
+                        ),
+                        CONF_ROUTER_VERIFY_SSL: current_router.get(
+                            CONF_ROUTER_VERIFY_SSL, DEFAULT_VERIFY_SSL
+                        ),
+                    },
+                )
+
+                # Update the router configuration
+                routers[self.selected_router_index] = updated_router
+
+                # Update the config entry
+                new_data = dict(self.config_entry.data)
+                new_data[CONF_ROUTERS] = routers
+
+                self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+
+                # Reload the integration to apply new credentials
+                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+                return self.async_create_entry(
+                    title="", data=self.config_entry.options  # Keep existing options unchanged
+                )
+
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except Exception:
+                errors["base"] = "unknown"
+
+        # Get current router details
+        routers = self.config_entry.data[CONF_ROUTERS]
+        current_router = routers[self.selected_router_index]
+
+        return self.async_show_form(
+            step_id="update_credentials",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ROUTER_USERNAME, default=current_router[CONF_ROUTER_USERNAME]
+                    ): str,
+                    vol.Required(CONF_ROUTER_PASSWORD): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "router_name": current_router[CONF_ROUTER_NAME],
+                "router_host": current_router[CONF_ROUTER_HOST],
             },
         )
