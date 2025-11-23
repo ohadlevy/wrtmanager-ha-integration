@@ -123,25 +123,24 @@ Automatically identifies and categorizes:
 
 ## Configuration
 
-### Router Setup Options
+### Adding Additional Routers (Optional)
 
-The integration supports multiple authentication methods:
+**Single Router Setup**: The integration works perfectly with just one router - this covers most home setups.
 
-```yaml
-# Example router configuration
-routers:
-  main_router:
-    host: "192.168.1.1"
-    username: "hass"
-    password: "secure_password"
-    description: "Main Router"
+**Multiple Router Setup**: If you have multiple OpenWrt routers or access points that you want to monitor:
 
-  living_room_ap:
-    host: "192.168.1.10"
-    username: "hass"
-    password: "secure_password"
-    description: "Living Room AP"
-```
+1. **After setting up your first router** (following the steps above)
+2. **To add more routers**:
+   - Go to **Settings** → **Devices & Services**
+   - Find your existing **WrtManager** integration
+   - Click **Configure**
+   - Select **Add another router**
+   - Enter the additional router's details
+
+**Benefits of Multiple Router Monitoring**:
+- Devices automatically merge across routers (one device entity even if it moves between APs)
+- Track roaming patterns in mesh/multi-AP setups
+- Monitor different network segments (main router + guest AP, etc.)
 
 ### VLAN Mapping
 
@@ -193,31 +192,12 @@ logger:
 
 ## Development
 
-### Contributing
+**Want to contribute?** See [CONTRIBUTING.md](CONTRIBUTING.md) for complete development setup, testing guidelines, and contribution workflow.
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Testing
-
+Quick start for developers:
 ```bash
-# Install development dependencies
-pip install -r requirements_dev.txt
-
-# Run tests
-pytest tests/
-
-# Run with coverage
-pytest tests/ --cov=custom_components.wrtmanager
-```
-
-### Debugging
-
-Use the validation script to test router connectivity:
-
-```bash
-# Test all routers in your configuration
-cd tools/
-ruby validate_http_ubus.rb ../config/router_config.yml
+./dev-setup.sh  # Sets up everything automatically
+make help       # See all available commands
 ```
 
 ## Roadmap
