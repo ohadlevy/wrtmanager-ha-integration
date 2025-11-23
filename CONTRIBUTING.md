@@ -12,10 +12,10 @@ git clone https://github.com/ohadlevy/wrtmanager-ha-integration.git
 cd wrtmanager-ha-integration
 
 # Set up development environment (this creates a venv and installs everything)
-make setup-dev
+./dev-setup.sh
 
-# Activate virtual environment
-source venv/bin/activate
+# The script automatically activates the venv and runs verification tests
+# If you need to reactivate later: source venv/bin/activate
 ```
 
 ### 2. Alternative Manual Setup
@@ -178,7 +178,7 @@ make lint
 Pre-commit hooks automatically run quality checks before each commit:
 
 ```bash
-# Install hooks (done automatically with make setup-dev)
+# Install hooks (done automatically with ./dev-setup.sh)
 make pre-commit-install
 
 # Run hooks manually

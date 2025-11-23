@@ -9,12 +9,7 @@ help:	## Show this help message
 
 # Environment Setup
 setup-dev:	## Set up development environment
-	python3 -m venv venv
-	./venv/bin/pip install -e ".[dev]"
-	./venv/bin/pre-commit install
-	@echo ""
-	@echo "✅ Development environment set up!"
-	@echo "Run 'source venv/bin/activate' to activate the virtual environment"
+	./dev-setup.sh
 
 install:	## Install package dependencies
 	pip install -e .
@@ -62,11 +57,11 @@ pre-commit-install:	## Install pre-commit hooks
 	pre-commit install
 
 # Documentation
-docs:	## Build documentation
-	cd docs && make html
+docs:	## Build documentation (requires docs/ setup)
+	@if [ -f "docs/Makefile" ]; then cd docs && make html; else echo "❌ Documentation not set up. See CONTRIBUTING.md for setup instructions."; fi
 
 docs-serve:	## Serve documentation locally
-	cd docs/_build/html && python -m http.server 8000
+	@if [ -d "docs/_build/html" ]; then cd docs/_build/html && python -m http.server 8000; else echo "❌ Documentation not built. Run 'make docs' first."; fi
 
 # Utilities
 clean:	## Clean build artifacts and cache files
@@ -75,8 +70,8 @@ clean:	## Clean build artifacts and cache files
 	find . -type d -name "*.egg-info" -exec rm -rf {} +
 	rm -rf build/ dist/ .coverage htmlcov/ .pytest_cache/ .mypy_cache/
 
-check-deps:	## Check for security vulnerabilities in dependencies
-	pip-audit
+check-deps:	## Check for security vulnerabilities in dependencies (requires pip-audit)
+	@if command -v pip-audit >/dev/null 2>&1; then pip-audit; else echo "❌ pip-audit not installed. Run 'pip install pip-audit' first."; fi
 
 # Home Assistant specific
 ha-validate:	## Validate Home Assistant integration
@@ -102,9 +97,9 @@ release-check:	## Check if ready for release
 	@echo "🚀 Checking release readiness..."
 	@$(MAKE) dev-check
 	@echo "📝 Checking version consistency..."
-	@grep -q "version.*1\.0\.0" custom_components/wrtmanager/manifest.json
-	@grep -q "version = \"1\.0\.0\"" pyproject.toml
-	@echo "✅ Ready for release!"
+	@VERSION=$$(grep 'version = ' pyproject.toml | cut -d'"' -f2) && \
+	 grep -q "version.*$$VERSION" custom_components/wrtmanager/manifest.json && \
+	 echo "✅ Version $$VERSION is consistent across files!"
 
 # Quick development commands
 quick-test:	## Quick test run (no coverage)

@@ -40,15 +40,18 @@ async def test_authentication_success():
         ],
     }
 
-    with aioresponses() as m:
-        m.post(
-            "http://192.168.1.1/ubus",
-            payload=auth_response,
-            status=200,
-        )
+    try:
+        with aioresponses() as m:
+            m.post(
+                "http://192.168.1.1/ubus",
+                payload=auth_response,
+                status=200,
+            )
 
-        session_id = await client.authenticate()
-        assert session_id == "test_session_123"
+            session_id = await client.authenticate()
+            assert session_id == "test_session_123"
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
