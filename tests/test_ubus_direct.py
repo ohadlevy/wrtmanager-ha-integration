@@ -101,3 +101,72 @@ async def test_close_session():
     # Verify close was called on the mock session
     mock_session.close.assert_called_once()
     assert client._session is None
+
+
+@pytest.mark.asyncio
+async def test_https_client_url():
+    """Test that HTTPS client uses correct URL."""
+    client = UbusClient("192.168.1.1", "hass", "password", use_https=True)
+
+    # Verify HTTPS URL is used
+    assert client.base_url == "https://192.168.1.1/ubus"
+    assert client.use_https is True
+    assert client.verify_ssl is False  # Default
+
+
+@pytest.mark.asyncio
+async def test_http_client_url():
+    """Test that HTTP client uses correct URL (default)."""
+    client = UbusClient("192.168.1.1", "hass", "password")
+
+    # Verify HTTP URL is used by default
+    assert client.base_url == "http://192.168.1.1/ubus"
+    assert client.use_https is False
+    assert client.verify_ssl is False
+
+
+@pytest.mark.asyncio
+async def test_https_authentication_success():
+    """Test successful authentication with HTTPS."""
+    client = UbusClient("192.168.1.1", "hass", "password", use_https=True, verify_ssl=False)
+
+    auth_response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": [
+            0,
+            {
+                "ubus_rpc_session": "test_https_session",
+                "timeout": 300,
+                "expires": 299,
+            },
+        ],
+    }
+
+    with aioresponses() as m:
+        m.post(
+            "https://192.168.1.1/ubus",
+            payload=auth_response,
+            status=200,
+        )
+
+        session_id = await client.authenticate()
+        assert session_id == "test_https_session"
+
+
+@pytest.mark.asyncio
+async def test_https_call_ubus_success():
+    """Test successful ubus call with HTTPS."""
+    client = UbusClient("192.168.1.1", "hass", "password", use_https=True)
+
+    response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": [0, {"secure": "data"}],
+    }
+
+    with aioresponses() as m:
+        m.post("https://192.168.1.1/ubus", payload=response, status=200)
+
+        result = await client.call_ubus("session", "service", "method", {})
+        assert result == {"secure": "data"}
