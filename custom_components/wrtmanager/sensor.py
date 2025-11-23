@@ -142,9 +142,11 @@ class WrtManagerSensorBase(CoordinatorEntity[WrtManagerCoordinator], SensorEntit
         self._router_name = router_name
         self._sensor_type = sensor_type
 
-        # Create unique entity ID
-        self._attr_unique_id = f"{router_host}_{sensor_type}"
+        # Create unique entity ID using router name for clean entity_id generation
+        safe_router_name = router_name.lower().replace(" ", "_").replace("-", "_")
+        self._attr_unique_id = f"wrtmanager_{safe_router_name}_{sensor_type}"
         self._attr_name = f"{router_name} {sensor_name}"
+        self._attr_has_entity_name = False  # Use full name for entity_id
 
     @property
     def device_info(self) -> DeviceInfo:

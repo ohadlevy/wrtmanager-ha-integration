@@ -149,6 +149,7 @@ def sample_coordinator_data():
 def sample_config_entry():
     """Sample config entry with multiple routers."""
     config_entry = Mock()
+    config_entry.entry_id = "test_entry_1"
     config_entry.data = {
         "routers": [
             {"host": "192.168.1.1", "name": "Living Room Router"},
@@ -159,28 +160,60 @@ def sample_config_entry():
     return config_entry
 
 
+@pytest.fixture
+def mock_hass_with_coordinator(
+    sample_coordinator_data, sample_config_entry, mock_device_registry, mock_area_registry
+):
+    """Create a mock hass with coordinator for multi-coordinator tests."""
+    coordinator = Mock(spec=WrtManagerCoordinator)
+    coordinator.data = sample_coordinator_data
+    coordinator.last_update_success = True
+
+    # Mock hass with config_entries for multi-coordinator support
+    mock_hass = Mock()
+    mock_config_entries = Mock()
+    mock_config_entries.async_entries = Mock(return_value=[sample_config_entry])
+    mock_hass.config_entries = mock_config_entries
+    mock_hass.data = {DOMAIN: {sample_config_entry.entry_id: coordinator}}
+
+    # Mock registry access
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import device_registry as dr
+
+    ar.async_get = Mock(return_value=mock_area_registry)
+    dr.async_get = Mock(return_value=mock_device_registry)
+
+    return mock_hass, coordinator
+
+
 class TestAreaBasedSSIDGrouping:
     """Test area-based SSID grouping functionality."""
 
     @pytest.mark.asyncio
     async def test_create_ssid_entities_with_areas(
-        self, mock_hass_with_registries, sample_coordinator_data, sample_config_entry
+        self, mock_device_registry, mock_area_registry, sample_coordinator_data, sample_config_entry
     ):
         """Test creation of SSID entities with area-based grouping."""
         # Setup coordinator with data
         coordinator = Mock(spec=WrtManagerCoordinator)
         coordinator.data = sample_coordinator_data
+        coordinator.last_update_success = True
+
+        # Create mock hass with config_entries support
+        mock_hass = Mock()
+        mock_config_entries = Mock()
+        mock_config_entries.async_entries = Mock(return_value=[sample_config_entry])
+        mock_hass.config_entries = mock_config_entries
+        mock_hass.data = {DOMAIN: {sample_config_entry.entry_id: coordinator}}
 
         # Mock the registry functions to return our mocks
         with pytest.MonkeyPatch().context() as m:
             import custom_components.wrtmanager.binary_sensor as bs
 
-            m.setattr(bs.dr, "async_get", lambda hass: mock_hass_with_registries)
-            m.setattr(bs.ar, "async_get", lambda hass: mock_hass_with_registries)
+            m.setattr(bs.dr, "async_get", lambda hass: mock_device_registry)
+            m.setattr(bs.ar, "async_get", lambda hass: mock_area_registry)
 
-        entities = await _create_ssid_entities(
-            mock_hass_with_registries, coordinator, sample_config_entry
-        )
+            entities = await _create_ssid_entities(mock_hass, coordinator, sample_config_entry)
 
         # Should create global entities for each unique SSID
         global_entities = [e for e in entities if isinstance(e, WrtGlobalSSIDBinarySensor)]
@@ -193,11 +226,11 @@ class TestAreaBasedSSIDGrouping:
         # GuestNetwork only in one area, should not have area entities
         assert len(area_entities) >= 1  # At least MainNetwork area entities
 
-    def test_global_ssid_sensor_properties(self, sample_coordinator_data):
+    def test_global_ssid_sensor_properties(
+        self, sample_coordinator_data, sample_config_entry, mock_hass_with_coordinator
+    ):
         """Test global SSID sensor properties."""
-        coordinator = Mock(spec=WrtManagerCoordinator)
-        coordinator.data = sample_coordinator_data
-        coordinator.last_update_success = True
+        mock_hass, coordinator = mock_hass_with_coordinator
 
         # Create sample SSID group for MainNetwork
         ssid_group = {
@@ -222,14 +255,13 @@ class TestAreaBasedSSIDGrouping:
             "areas": {"Living Room", "Bedroom"},
         }
 
-        config_entry = Mock()
-
         sensor = WrtGlobalSSIDBinarySensor(
             coordinator=coordinator,
             ssid_name="MainNetwork",
             ssid_group=ssid_group,
-            config_entry=config_entry,
+            config_entry=sample_config_entry,
         )
+        sensor.hass = mock_hass
 
         # Test unique ID
         assert sensor.unique_id == "wrtmanager_global_mainnetwork_enabled"
@@ -255,11 +287,11 @@ class TestAreaBasedSSIDGrouping:
         assert "Living Room" in attributes["areas"]
         assert "Bedroom" in attributes["areas"]
 
-    def test_area_ssid_sensor_properties(self, sample_coordinator_data):
+    def test_area_ssid_sensor_properties(
+        self, sample_coordinator_data, sample_config_entry, mock_hass_with_coordinator
+    ):
         """Test area SSID sensor properties."""
-        coordinator = Mock(spec=WrtManagerCoordinator)
-        coordinator.data = sample_coordinator_data
-        coordinator.last_update_success = True
+        mock_hass, coordinator = mock_hass_with_coordinator
 
         # Create area instances for Living Room
         area_instances = [
@@ -270,15 +302,14 @@ class TestAreaBasedSSIDGrouping:
             }
         ]
 
-        config_entry = Mock()
-
         sensor = WrtAreaSSIDBinarySensor(
             coordinator=coordinator,
             ssid_name="MainNetwork",
             area_name="Living Room",
             area_instances=area_instances,
-            config_entry=config_entry,
+            config_entry=sample_config_entry,
         )
+        sensor.hass = mock_hass
 
         # Test unique ID
         assert sensor.unique_id == "wrtmanager_living_room_mainnetwork_enabled"
@@ -301,7 +332,9 @@ class TestAreaBasedSSIDGrouping:
         assert len(attributes["disabled_routers"]) == 0
         assert attributes["coverage"] == "Area: Living Room"
 
-    def test_global_ssid_sensor_all_disabled(self, sample_coordinator_data):
+    def test_global_ssid_sensor_all_disabled(
+        self, sample_coordinator_data, sample_config_entry, mock_hass_with_coordinator
+    ):
         """Test global SSID sensor when all instances are disabled."""
         # Modify data to have all SSIDs disabled
         for router_ssids in sample_coordinator_data["ssids"].values():
@@ -309,9 +342,7 @@ class TestAreaBasedSSIDGrouping:
                 if ssid["ssid_name"] == "MainNetwork":
                     ssid["disabled"] = True
 
-        coordinator = Mock(spec=WrtManagerCoordinator)
-        coordinator.data = sample_coordinator_data
-        coordinator.last_update_success = True
+        mock_hass, coordinator = mock_hass_with_coordinator
 
         ssid_group = {
             "routers": ["192.168.1.1", "192.168.1.2", "192.168.1.3"],
@@ -335,14 +366,13 @@ class TestAreaBasedSSIDGrouping:
             "areas": {"Living Room", "Bedroom"},
         }
 
-        config_entry = Mock()
-
         sensor = WrtGlobalSSIDBinarySensor(
             coordinator=coordinator,
             ssid_name="MainNetwork",
             ssid_group=ssid_group,
-            config_entry=config_entry,
+            config_entry=sample_config_entry,
         )
+        sensor.hass = mock_hass
 
         # Should be False when all are disabled
         assert sensor.is_on is False
@@ -352,13 +382,34 @@ class TestAreaBasedSSIDGrouping:
         assert len(attributes["enabled_routers"]) == 0
         assert len(attributes["disabled_routers"]) == 3
 
-    def test_ssid_sensor_no_area_assignment(self, sample_coordinator_data):
+    def test_ssid_sensor_no_area_assignment(
+        self, sample_coordinator_data, sample_config_entry, mock_device_registry, mock_area_registry
+    ):
         """Test SSID sensor behavior when routers have no area assignment."""
+        # Create a coordinator with only the Kitchen router (no area)
         coordinator = Mock(spec=WrtManagerCoordinator)
-        coordinator.data = sample_coordinator_data
+        coordinator.data = {
+            "ssids": {"192.168.1.3": sample_coordinator_data["ssids"]["192.168.1.3"]}
+        }
         coordinator.last_update_success = True
 
-        # Create SSID group with no areas (all routers unassigned)
+        # Create config entry with only Kitchen router
+        config_entry = Mock()
+        config_entry.entry_id = "test_entry_kitchen"
+        config_entry.data = {
+            "routers": [
+                {"host": "192.168.1.3", "name": "Kitchen Router"},
+            ]
+        }
+
+        # Create mock hass with only this coordinator (no other routers)
+        mock_hass = Mock()
+        mock_config_entries = Mock()
+        mock_config_entries.async_entries = Mock(return_value=[config_entry])
+        mock_hass.config_entries = mock_config_entries
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: coordinator}}
+
+        # Create SSID group with no areas (router unassigned)
         ssid_group = {
             "routers": ["192.168.1.3"],
             "ssid_instances": [
@@ -371,14 +422,20 @@ class TestAreaBasedSSIDGrouping:
             "areas": set(),  # No areas
         }
 
-        config_entry = Mock()
-
         sensor = WrtGlobalSSIDBinarySensor(
             coordinator=coordinator,
             ssid_name="MainNetwork",
             ssid_group=ssid_group,
             config_entry=config_entry,
         )
+        sensor.hass = mock_hass
+
+        # Mock registry access
+        from homeassistant.helpers import area_registry as ar
+        from homeassistant.helpers import device_registry as dr
+
+        ar.async_get = Mock(return_value=mock_area_registry)
+        dr.async_get = Mock(return_value=mock_device_registry)
 
         # Test attributes show no areas assigned
         attributes = sensor.extra_state_attributes
@@ -388,11 +445,11 @@ class TestAreaBasedSSIDGrouping:
         assert sensor.is_on is True  # Kitchen router has MainNetwork enabled
         assert sensor.available is True
 
-    def test_frequency_band_aggregation(self, sample_coordinator_data):
+    def test_frequency_band_aggregation(
+        self, sample_coordinator_data, sample_config_entry, mock_hass_with_coordinator
+    ):
         """Test frequency band aggregation across routers."""
-        coordinator = Mock(spec=WrtManagerCoordinator)
-        coordinator.data = sample_coordinator_data
-        coordinator.last_update_success = True
+        mock_hass, coordinator = mock_hass_with_coordinator
 
         # Mix of consolidated and single radio SSIDs
         ssid_group = {
@@ -416,14 +473,13 @@ class TestAreaBasedSSIDGrouping:
             "areas": {"Living Room"},
         }
 
-        config_entry = Mock()
-
         sensor = WrtGlobalSSIDBinarySensor(
             coordinator=coordinator,
             ssid_name="MainNetwork",
             ssid_group=ssid_group,
-            config_entry=config_entry,
+            config_entry=sample_config_entry,
         )
+        sensor.hass = mock_hass
 
         # Should aggregate frequency bands from both routers
         attributes = sensor.extra_state_attributes
