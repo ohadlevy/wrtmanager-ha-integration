@@ -60,11 +60,17 @@ call_ubus_api() {
     local params="$4"
     local request_id="${5:-1}"
 
-    curl -s $([ "$PROTOCOL" = "https" ] && echo "-k" || true) \
-        -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
-        -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"id\":${request_id},\"method\":\"call\",\"params\":[\"${session_id}\",\"${service}\",\"${method}\",${params}]}" \
-        2>/dev/null
+    if [ "$PROTOCOL" = "https" ]; then
+        curl -s -k -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
+            -H "Content-Type: application/json" \
+            -d "{\"jsonrpc\":\"2.0\",\"id\":${request_id},\"method\":\"call\",\"params\":[\"${session_id}\",\"${service}\",\"${method}\",${params}]}" \
+            2>/dev/null || true
+    else
+        curl -s -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
+            -H "Content-Type: application/json" \
+            -d "{\"jsonrpc\":\"2.0\",\"id\":${request_id},\"method\":\"call\",\"params\":[\"${session_id}\",\"${service}\",\"${method}\",${params}]}" \
+            2>/dev/null || echo ""
+    fi
 }
 
 # Test SSH connectivity first
@@ -203,6 +209,10 @@ EOF
 echo "Step 7: Restarting services..."
 run_on_router "/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart"
 
+# Give services time to fully restart
+echo "Waiting for services to restart..."
+sleep 3
+
 # 8. Test the setup
 echo "Step 8: Testing authentication and API access..."
 
@@ -214,7 +224,7 @@ echo "Auto-detecting HTTP/HTTPS protocol..."
 PROTOCOL="http"
 
 # Try HTTPS first (more secure)
-HTTPS_TEST=$(curl -s -k -X POST "https://$ROUTER_IP/ubus" \
+HTTPS_TEST=$(curl -s -k --connect-timeout 3 -X POST "https://$ROUTER_IP/ubus" \
     -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"call\",\"params\":[\"00000000000000000000000000000000\",\"session\",\"login\",{\"username\":\"hass\",\"password\":\"$HASS_PASSWORD\"}]}" \
     2>/dev/null || echo "HTTPS_FAILED")
@@ -228,9 +238,21 @@ fi
 
 echo "Testing $PROTOCOL ubus authentication on $ROUTER_IP..."
 
+
 # Test authentication
 RESPONSE=$(call_ubus_api "00000000000000000000000000000000" "session" "login" "{\"username\":\"hass\",\"password\":\"$HASS_PASSWORD\"}" 1)
 if [[ -z "$RESPONSE" ]]; then
+    echo "❌ Empty response from ubus API call"
+    echo "   Checking if ubus endpoint is accessible..."
+
+    # Test basic connectivity to ubus endpoint
+    if curl -s --connect-timeout 5 "${PROTOCOL}://$ROUTER_IP/ubus" >/dev/null 2>&1; then
+        echo "   ✅ ubus endpoint is accessible"
+        echo "   ❌ Authentication request failed - check credentials or rpcd configuration"
+    else
+        echo "   ❌ Cannot reach ubus endpoint at ${PROTOCOL}://$ROUTER_IP/ubus"
+        echo "   Check if uhttpd service is running and ubus_prefix is configured"
+    fi
     RESPONSE="CURL_FAILED"
 fi
 
