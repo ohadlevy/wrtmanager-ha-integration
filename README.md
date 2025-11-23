@@ -39,14 +39,27 @@ A comprehensive Home Assistant integration for managing OpenWrt networks with ad
 
 ### Step 1: Setup OpenWrt Routers
 
-First, configure each of your OpenWrt routers to allow Home Assistant access:
+Configure each of your OpenWrt routers from a Linux machine with SSH root access:
 
 ```bash
-# Download and run the setup script on each router
+# Download the setup script once on your Linux machine
 wget https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/main/scripts/setup_openwrt_ha_integration.sh
 chmod +x setup_openwrt_ha_integration.sh
-./setup_openwrt_ha_integration.sh
+
+# Run it for each router (provide router IP and hass user password)
+./setup_openwrt_ha_integration.sh 192.168.1.1 MySecurePassword123
+./setup_openwrt_ha_integration.sh 192.168.1.10 MySecurePassword123
+# ... repeat for each router
+
+# Alternative: Let the script prompt for password
+./setup_openwrt_ha_integration.sh 192.168.1.1
+# (script will ask: "Enter password for 'hass' user:")
 ```
+
+**Requirements:**
+- Linux machine with SSH access to your routers
+- Root SSH access to each OpenWrt router
+- Internet access on routers for package installation
 
 This script will:
 - Install required packages (`uhttpd-mod-ubus`, `rpcd`)
