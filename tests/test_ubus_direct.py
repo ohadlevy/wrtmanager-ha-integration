@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 from aioresponses import aioresponses
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components" / "wrtmanager"))
@@ -22,11 +23,39 @@ from ubus_client import (
 )
 
 
-@pytest.mark.asyncio
-async def test_authentication_success():
-    """Test successful authentication."""
+@pytest_asyncio.fixture
+async def ubus_client():
+    """Fixture that provides a UbusClient with automatic cleanup."""
     client = UbusClient("192.168.1.1", "hass", "password")
+    try:
+        yield client
+    finally:
+        await client.close()
 
+
+@pytest_asyncio.fixture
+async def https_ubus_client():
+    """Fixture that provides an HTTPS UbusClient with automatic cleanup."""
+    client = UbusClient("192.168.1.1", "hass", "password", use_https=True, verify_ssl=False)
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
+@pytest_asyncio.fixture
+async def ubus_client_wrong_password():
+    """Fixture that provides a UbusClient with wrong password for testing auth failures."""
+    client = UbusClient("192.168.1.1", "hass", "wrong_password")
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_authentication_success(ubus_client):
+    """Test successful authentication."""
     auth_response = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -40,18 +69,15 @@ async def test_authentication_success():
         ],
     }
 
-    try:
-        with aioresponses() as m:
-            m.post(
-                "http://192.168.1.1/ubus",
-                payload=auth_response,
-                status=200,
-            )
+    with aioresponses() as m:
+        m.post(
+            "http://192.168.1.1/ubus",
+            payload=auth_response,
+            status=200,
+        )
 
-            session_id = await client.authenticate()
-            assert session_id == "test_session_123"
-    finally:
-        await client.close()
+        session_id = await ubus_client.authenticate()
+        assert session_id == "test_session_123"
 
 
 @pytest.mark.asyncio
@@ -65,11 +91,14 @@ async def test_authentication_failure():
         "result": [1, {}],  # Error code 1 = authentication failed
     }
 
-    with aioresponses() as m:
-        m.post("http://192.168.1.1/ubus", payload=auth_response, status=200)
+    try:
+        with aioresponses() as m:
+            m.post("http://192.168.1.1/ubus", payload=auth_response, status=200)
 
-        with pytest.raises(UbusAuthenticationError):
-            await client.authenticate()
+            with pytest.raises(UbusAuthenticationError):
+                await client.authenticate()
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -83,11 +112,14 @@ async def test_call_ubus_success():
         "result": [0, {"test": "data"}],
     }
 
-    with aioresponses() as m:
-        m.post("http://192.168.1.1/ubus", payload=response, status=200)
+    try:
+        with aioresponses() as m:
+            m.post("http://192.168.1.1/ubus", payload=response, status=200)
 
-        result = await client.call_ubus("session", "service", "method", {})
-        assert result == {"test": "data"}
+            result = await client.call_ubus("session", "service", "method", {})
+            assert result == {"test": "data"}
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -95,15 +127,20 @@ async def test_close_session():
     """Test closing the session."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
-    # Mock the session
-    mock_session = AsyncMock()
-    client._session = mock_session
+    try:
+        # Mock the session
+        mock_session = AsyncMock()
+        client._session = mock_session
 
-    await client.close()
+        await client.close()
 
-    # Verify close was called on the mock session
-    mock_session.close.assert_called_once()
-    assert client._session is None
+        # Verify close was called on the mock session
+        mock_session.close.assert_called_once()
+        assert client._session is None
+    finally:
+        # Ensure cleanup even if test fails
+        if client._session:
+            await client.close()
 
 
 @pytest.mark.asyncio
@@ -111,10 +148,13 @@ async def test_https_client_url():
     """Test that HTTPS client uses correct URL."""
     client = UbusClient("192.168.1.1", "hass", "password", use_https=True)
 
-    # Verify HTTPS URL is used
-    assert client.base_url == "https://192.168.1.1/ubus"
-    assert client.use_https is True
-    assert client.verify_ssl is False  # Default
+    try:
+        # Verify HTTPS URL is used
+        assert client.base_url == "https://192.168.1.1/ubus"
+        assert client.use_https is True
+        assert client.verify_ssl is False  # Default
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -122,10 +162,13 @@ async def test_http_client_url():
     """Test that HTTP client uses correct URL (default)."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
-    # Verify HTTP URL is used by default
-    assert client.base_url == "http://192.168.1.1/ubus"
-    assert client.use_https is False
-    assert client.verify_ssl is False
+    try:
+        # Verify HTTP URL is used by default
+        assert client.base_url == "http://192.168.1.1/ubus"
+        assert client.use_https is False
+        assert client.verify_ssl is False
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -146,15 +189,18 @@ async def test_https_authentication_success():
         ],
     }
 
-    with aioresponses() as m:
-        m.post(
-            "https://192.168.1.1/ubus",
-            payload=auth_response,
-            status=200,
-        )
+    try:
+        with aioresponses() as m:
+            m.post(
+                "https://192.168.1.1/ubus",
+                payload=auth_response,
+                status=200,
+            )
 
-        session_id = await client.authenticate()
-        assert session_id == "test_https_session"
+            session_id = await client.authenticate()
+            assert session_id == "test_https_session"
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -168,8 +214,11 @@ async def test_https_call_ubus_success():
         "result": [0, {"secure": "data"}],
     }
 
-    with aioresponses() as m:
-        m.post("https://192.168.1.1/ubus", payload=response, status=200)
+    try:
+        with aioresponses() as m:
+            m.post("https://192.168.1.1/ubus", payload=response, status=200)
 
-        result = await client.call_ubus("session", "service", "method", {})
-        assert result == {"secure": "data"}
+            result = await client.call_ubus("session", "service", "method", {})
+            assert result == {"secure": "data"}
+    finally:
+        await client.close()
