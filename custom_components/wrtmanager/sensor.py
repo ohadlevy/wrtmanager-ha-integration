@@ -8,7 +8,6 @@ memory usage, CPU load, and network interface status.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
@@ -31,7 +30,7 @@ except ImportError:
     # Fallback for older HA versions - use string constants directly
     UNIT_MEGABYTES = "MB"
     UNIT_SECONDS = "s"
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -35,9 +35,7 @@ from .const import (
     DATA_SOURCE_WIFI_ONLY,
     DEFAULT_USE_HTTPS,
     DEFAULT_VERIFY_SSL,
-    DOMAIN,
     ROAMING_DETECTION_THRESHOLD,
-    ROAMING_SIGNAL_HYSTERESIS,
 )
 from .device_manager import DeviceManager
 from .ubus_client import UbusClient, UbusClientError
