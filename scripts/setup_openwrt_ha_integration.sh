@@ -20,15 +20,18 @@ set -e
 
 ROUTER_HOST="${1:-}"
 HASS_PASSWORD="${2:-}"
+HASS_IPS="${3:-}"
 
 if [[ -z "$ROUTER_HOST" ]]; then
-    echo "Usage: $0 <router_hostname_or_ip> [hass_password]"
+    echo "Usage: $0 <router_hostname_or_ip> [hass_password] [hass_ips]"
     echo ""
     echo "Examples:"
     echo "  $0 192.168.1.1"
     echo "  $0 main-router MySecurePassword123"
+    echo "  $0 192.168.1.1 MyPassword '192.168.1.100,192.168.1.101'"
     echo ""
-    echo "If no password is provided, you will be prompted to enter one."
+    echo "This script can be used for both new installations and updates."
+    echo "Home Assistant IPs are optional but recommended for security."
     exit 1
 fi
 
@@ -40,6 +43,38 @@ if [[ -z "$HASS_PASSWORD" ]]; then
     if [[ -z "$HASS_PASSWORD" ]]; then
         echo "❌ Password cannot be empty"
         exit 1
+    fi
+fi
+
+# Prompt for Home Assistant IPs for security restrictions (optional)
+if [[ -z "$HASS_IPS" ]]; then
+    echo ""
+    echo "🔒 Security Enhancement: Restrict ubus access to specific Home Assistant IPs"
+    echo "Enter one or more IP addresses (comma-separated for multiple):"
+    echo "Examples: 192.168.1.100  or  192.168.1.100,192.168.1.101"
+    echo -n "Home Assistant IP(s) (or press Enter to skip): "
+    read HASS_IPS
+fi
+
+# Validate and parse IP addresses
+VALID_IPS=()
+if [[ -n "$HASS_IPS" ]]; then
+    IFS=',' read -ra IP_ARRAY <<< "$HASS_IPS"
+    for ip in "${IP_ARRAY[@]}"; do
+        # Trim whitespace
+        ip=$(echo "$ip" | xargs)
+        # Basic IP validation
+        if [[ "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+            VALID_IPS+=("$ip")
+        else
+            echo "⚠️  Invalid IP format: $ip (skipping)"
+        fi
+    done
+
+    if [[ ${#VALID_IPS[@]} -eq 0 ]]; then
+        echo "⚠️  No valid IPs provided. Skipping IP restrictions."
+    else
+        echo "✅ Will restrict access to: ${VALID_IPS[*]}"
     fi
 fi
 
@@ -171,9 +206,7 @@ run_on_router "
                 \"uci\": [ \"get\" ],
                 \"network.wireless\": [ \"status\" ],
                 \"network.device\": [ \"status\" ],
-                \"dhcp\": [ \"ipv4leases\", \"ipv6leases\" ],
-                \"log\": [ \"read\" ],
-                \"file\": [ \"read\", \"list\" ]
+                \"dhcp\": [ \"ipv4leases\", \"ipv6leases\" ]
             }
         },
         \"write\": {
@@ -186,12 +219,38 @@ run_on_router "
 EOF
 "
 
-# 7. Restart services
-echo "Step 7: Restarting services..."
+# 7. Configure IP-based access restrictions (if IPs provided)
+if [[ ${#VALID_IPS[@]} -gt 0 ]]; then
+    echo "Step 7: Configuring IP-based access restrictions..."
+
+    # Build UCI commands for allowed IPs
+    IP_RESTRICTIONS=""
+    for allowed_ip in "${VALID_IPS[@]}"; do
+        IP_RESTRICTIONS="${IP_RESTRICTIONS}
+    uci add_list uhttpd.main.hass_allow='${allowed_ip}'"
+    done
+
+    run_on_router "
+    # Remove existing hass_allow entries
+    while uci delete uhttpd.main.hass_allow 2>/dev/null; do :; done
+
+    # Add new allowed IPs
+    ${IP_RESTRICTIONS}
+
+    # Commit changes
+    uci commit uhttpd
+    "
+    echo "✅ Restricted ubus access to: ${VALID_IPS[*]}"
+else
+    echo "Step 7: Skipping IP restrictions (no IPs provided)"
+fi
+
+# 8. Restart services
+echo "Step 8: Restarting services..."
 run_on_router "/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart"
 
-# 8. Test the setup
-echo "Step 8: Testing authentication and API access..."
+# 9. Test the setup
+echo "Step 9: Testing authentication and API access..."
 
 # Get router's IP address
 ROUTER_IP=$(run_on_router "ip addr show br-lan | grep 'inet ' | head -1 | awk '{print \$2}' | cut -d'/' -f1" 2>/dev/null || echo "$ROUTER_HOST")
@@ -306,6 +365,11 @@ echo "  Username: hass"
 echo "  Password: [configured]"
 echo "  Protocol: ${PROTOCOL^^}"
 echo "  ubus endpoint: ${PROTOCOL}://$ROUTER_IP/ubus"
+if [[ ${#VALID_IPS[@]} -gt 0 ]]; then
+    echo "  IP Restrictions: ${VALID_IPS[*]}"
+else
+    echo "  IP Restrictions: None (open to all IPs)"
+fi
 echo ""
 echo "To configure this router in WrtManager:"
 echo "  1. Add the WrtManager integration in Home Assistant"
