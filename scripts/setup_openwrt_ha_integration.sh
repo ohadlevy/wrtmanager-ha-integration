@@ -20,18 +20,15 @@ set -e
 
 ROUTER_HOST="${1:-}"
 HASS_PASSWORD="${2:-}"
-HASS_IPS="${3:-}"
 
 if [[ -z "$ROUTER_HOST" ]]; then
-    echo "Usage: $0 <router_hostname_or_ip> [hass_password] [hass_ips]"
+    echo "Usage: $0 <router_hostname_or_ip> [hass_password]"
     echo ""
     echo "Examples:"
     echo "  $0 192.168.1.1"
     echo "  $0 main-router MySecurePassword123"
-    echo "  $0 192.168.1.1 MyPassword '192.168.1.100,192.168.1.101'"
     echo ""
     echo "This script can be used for both new installations and updates."
-    echo "Home Assistant IPs are optional but recommended for security."
     exit 1
 fi
 
@@ -46,38 +43,6 @@ if [[ -z "$HASS_PASSWORD" ]]; then
     fi
 fi
 
-# Prompt for Home Assistant IPs for security restrictions (optional)
-if [[ -z "$HASS_IPS" ]]; then
-    echo ""
-    echo "🔒 Security Enhancement: Restrict ubus access to specific Home Assistant IPs"
-    echo "Enter one or more IP addresses (comma-separated for multiple):"
-    echo "Examples: 192.168.1.100  or  192.168.1.100,192.168.1.101"
-    echo -n "Home Assistant IP(s) (or press Enter to skip): "
-    read HASS_IPS
-fi
-
-# Validate and parse IP addresses
-VALID_IPS=()
-if [[ -n "$HASS_IPS" ]]; then
-    IFS=',' read -ra IP_ARRAY <<< "$HASS_IPS"
-    for ip in "${IP_ARRAY[@]}"; do
-        # Trim whitespace
-        ip=$(echo "$ip" | xargs)
-        # Basic IP validation
-        if [[ "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-            VALID_IPS+=("$ip")
-        else
-            echo "⚠️  Invalid IP format: $ip (skipping)"
-        fi
-    done
-
-    if [[ ${#VALID_IPS[@]} -eq 0 ]]; then
-        echo "⚠️  No valid IPs provided. Skipping IP restrictions."
-    else
-        echo "✅ Will restrict access to: ${VALID_IPS[*]}"
-    fi
-fi
-
 echo "Setting up WrtManager integration on $ROUTER_HOST..."
 echo "This will configure HTTP ubus access for Home Assistant"
 echo ""
@@ -85,6 +50,21 @@ echo ""
 # Function to run commands on router
 run_on_router() {
     ssh -x root@"$ROUTER_HOST" "$1"
+}
+
+# Function to call ubus API with automatic HTTP/HTTPS handling
+call_ubus_api() {
+    local session_id="$1"
+    local service="$2"
+    local method="$3"
+    local params="$4"
+    local request_id="${5:-1}"
+
+    curl -s $([ "$PROTOCOL" = "https" ] && echo "-k" || true) \
+        -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
+        -H "Content-Type: application/json" \
+        -d "{\"jsonrpc\":\"2.0\",\"id\":${request_id},\"method\":\"call\",\"params\":[\"${session_id}\",\"${service}\",\"${method}\",${params}]}" \
+        2>/dev/null
 }
 
 # Test SSH connectivity first
@@ -219,38 +199,12 @@ run_on_router "
 EOF
 "
 
-# 7. Configure IP-based access restrictions (if IPs provided)
-if [[ ${#VALID_IPS[@]} -gt 0 ]]; then
-    echo "Step 7: Configuring IP-based access restrictions..."
-
-    # Build UCI commands for allowed IPs
-    IP_RESTRICTIONS=""
-    for allowed_ip in "${VALID_IPS[@]}"; do
-        IP_RESTRICTIONS="${IP_RESTRICTIONS}
-    uci add_list uhttpd.main.hass_allow='${allowed_ip}'"
-    done
-
-    run_on_router "
-    # Remove existing hass_allow entries
-    while uci delete uhttpd.main.hass_allow 2>/dev/null; do :; done
-
-    # Add new allowed IPs
-    ${IP_RESTRICTIONS}
-
-    # Commit changes
-    uci commit uhttpd
-    "
-    echo "✅ Restricted ubus access to: ${VALID_IPS[*]}"
-else
-    echo "Step 7: Skipping IP restrictions (no IPs provided)"
-fi
-
-# 8. Restart services
-echo "Step 8: Restarting services..."
+# 7. Restart services
+echo "Step 7: Restarting services..."
 run_on_router "/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart"
 
-# 9. Test the setup
-echo "Step 9: Testing authentication and API access..."
+# 8. Test the setup
+echo "Step 8: Testing authentication and API access..."
 
 # Use the router host/IP provided by user
 ROUTER_IP="$ROUTER_HOST"
@@ -275,10 +229,10 @@ fi
 echo "Testing $PROTOCOL ubus authentication on $ROUTER_IP..."
 
 # Test authentication
-RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
-    -H "Content-Type: application/json" \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"call\",\"params\":[\"00000000000000000000000000000000\",\"session\",\"login\",{\"username\":\"hass\",\"password\":\"$HASS_PASSWORD\"}]}" \
-    2>/dev/null || echo "CURL_FAILED")
+RESPONSE=$(call_ubus_api "00000000000000000000000000000000" "session" "login" "{\"username\":\"hass\",\"password\":\"$HASS_PASSWORD\"}" 1)
+if [[ -z "$RESPONSE" ]]; then
+    RESPONSE="CURL_FAILED"
+fi
 
 if [[ "$RESPONSE" == "CURL_FAILED" ]]; then
     echo "❌ HTTP request failed - check network connectivity to $ROUTER_IP"
@@ -290,10 +244,10 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
 
     # Test iwinfo devices call (required for WrtManager)
     echo "Testing iwinfo devices API call..."
-    TEST_RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
-        -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"call\",\"params\":[\"$SESSION_ID\",\"iwinfo\",\"devices\",{}]}" \
-        2>/dev/null || echo "TEST_FAILED")
+    TEST_RESPONSE=$(call_ubus_api "$SESSION_ID" "iwinfo" "devices" "{}" 2)
+    if [[ -z "$TEST_RESPONSE" ]]; then
+        TEST_RESPONSE="TEST_FAILED"
+    fi
 
     if echo "$TEST_RESPONSE" | grep -q '"devices"'; then
         echo "✅ iwinfo devices API working!"
@@ -302,10 +256,7 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
         FIRST_DEVICE=$(echo "$TEST_RESPONSE" | grep -o '"[^"]*phy[^"]*"' | head -1 | tr -d '"')
         if [ -n "$FIRST_DEVICE" ]; then
             echo "Testing iwinfo assoclist on $FIRST_DEVICE..."
-            ASSOC_RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
-                -H "Content-Type: application/json" \
-                -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"call\",\"params\":[\"$SESSION_ID\",\"iwinfo\",\"assoclist\",{\"device\":\"$FIRST_DEVICE\"}]}" \
-                2>/dev/null)
+            ASSOC_RESPONSE=$(call_ubus_api "$SESSION_ID" "iwinfo" "assoclist" "{\"device\":\"$FIRST_DEVICE\"}" 3)
 
             if echo "$ASSOC_RESPONSE" | grep -q '"results"'; then
                 echo "✅ iwinfo assoclist working!"
@@ -315,10 +266,7 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
 
             # Test hostapd get_clients (official HA method)
             echo "Testing hostapd get_clients on hostapd.$FIRST_DEVICE..."
-            HOSTAPD_RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
-                -H "Content-Type: application/json" \
-                -d "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"call\",\"params\":[\"$SESSION_ID\",\"hostapd.$FIRST_DEVICE\",\"get_clients\",{}]}" \
-                2>/dev/null)
+            HOSTAPD_RESPONSE=$(call_ubus_api "$SESSION_ID" "hostapd.$FIRST_DEVICE" "get_clients" "{}" 4)
 
             if echo "$HOSTAPD_RESPONSE" | grep -q '"clients"'; then
                 echo "✅ hostapd get_clients working!"
@@ -333,10 +281,10 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
 
     # Test DHCP leases call (optional - only works on DHCP servers, not APs)
     echo "Testing DHCP leases API call..."
-    DHCP_RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
-        -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"call\",\"params\":[\"$SESSION_ID\",\"dhcp\",\"ipv4leases\",{}]}" \
-        2>/dev/null || echo "DHCP_FAILED")
+    DHCP_RESPONSE=$(call_ubus_api "$SESSION_ID" "dhcp" "ipv4leases" "{}" 5)
+    if [[ -z "$DHCP_RESPONSE" ]]; then
+        DHCP_RESPONSE="DHCP_FAILED"
+    fi
 
     if echo "$DHCP_RESPONSE" | grep -q '"device"'; then
         echo "✅ DHCP API access working!"
@@ -365,11 +313,6 @@ echo "  Username: hass"
 echo "  Password: [configured]"
 echo "  Protocol: ${PROTOCOL^^}"
 echo "  ubus endpoint: ${PROTOCOL}://$ROUTER_HOST/ubus"
-if [[ ${#VALID_IPS[@]} -gt 0 ]]; then
-    echo "  IP Restrictions: ${VALID_IPS[*]}"
-else
-    echo "  IP Restrictions: None (open to all IPs)"
-fi
 echo ""
 echo "To configure this router in WrtManager:"
 echo "  1. Add the WrtManager integration in Home Assistant"
