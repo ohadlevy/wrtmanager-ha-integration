@@ -252,8 +252,8 @@ run_on_router "/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart"
 # 9. Test the setup
 echo "Step 9: Testing authentication and API access..."
 
-# Get router's IP address
-ROUTER_IP=$(run_on_router "ip addr show br-lan | grep 'inet ' | head -1 | awk '{print \$2}' | cut -d'/' -f1" 2>/dev/null || echo "$ROUTER_HOST")
+# Use the router host/IP provided by user
+ROUTER_IP="$ROUTER_HOST"
 
 # Auto-detect HTTP vs HTTPS
 echo "Auto-detecting HTTP/HTTPS protocol..."
@@ -360,11 +360,11 @@ echo ""
 echo "🎉 Setup completed successfully!"
 echo ""
 echo "Router configuration summary:"
-echo "  Router: $ROUTER_HOST ($ROUTER_IP)"
+echo "  Router: $ROUTER_HOST"
 echo "  Username: hass"
 echo "  Password: [configured]"
 echo "  Protocol: ${PROTOCOL^^}"
-echo "  ubus endpoint: ${PROTOCOL}://$ROUTER_IP/ubus"
+echo "  ubus endpoint: ${PROTOCOL}://$ROUTER_HOST/ubus"
 if [[ ${#VALID_IPS[@]} -gt 0 ]]; then
     echo "  IP Restrictions: ${VALID_IPS[*]}"
 else
@@ -374,7 +374,7 @@ echo ""
 echo "To configure this router in WrtManager:"
 echo "  1. Add the WrtManager integration in Home Assistant"
 echo "  2. Enter the following details:"
-echo "     Host: $ROUTER_IP"
+echo "     Host: $ROUTER_HOST"
 echo "     Username: hass"
 echo "     Password: $HASS_PASSWORD"
 echo ""
