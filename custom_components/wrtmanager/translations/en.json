@@ -74,6 +74,31 @@
           "username": "Username",
           "password": "New Password"
         }
+      },
+      "add_router": {
+        "title": "Add New Router",
+        "description": "{description}",
+        "data": {
+          "host": "Hostname or IP Address",
+          "name": "Router Name",
+          "username": "Username (default: hass)",
+          "password": "Password",
+          "description": "Description (optional)"
+        }
+      },
+      "select_router_to_remove": {
+        "title": "Select Router to Remove",
+        "description": "{description}",
+        "data": {
+          "router": "Router"
+        }
+      },
+      "confirm_remove_router": {
+        "title": "Confirm Router Removal",
+        "description": "{description}",
+        "data": {
+          "confirm": "Yes, remove this router"
+        }
       }
     },
     "error": {
@@ -82,7 +107,9 @@
       "unknown": "Unexpected error occurred while updating credentials."
     },
     "abort": {
-      "no_routers_configured": "No routers are configured. Please add a router first."
+      "no_routers_configured": "No routers are configured. Please add a router first.",
+      "cannot_remove_last_router": "Cannot remove the last router. At least one router must remain configured.",
+      "already_configured": "This router is already configured."
     }
   },
   "entity": {

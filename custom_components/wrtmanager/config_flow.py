@@ -300,6 +300,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 return await self.async_step_vlan_names()
             elif action == "router_credentials":
                 return await self.async_step_select_router()
+            elif action == "add_router":
+                return await self.async_step_add_router()
+            elif action == "remove_router":
+                return await self.async_step_select_router_to_remove()
 
         # Create main options menu
         return self.async_show_form(
@@ -310,6 +314,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         {
                             "vlan_names": "Customize VLAN Names",
                             "router_credentials": "Update Router Credentials",
+                            "add_router": "Add New Router",
+                            "remove_router": "Remove Router",
                         }
                     )
                 }
@@ -464,5 +470,157 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders={
                 "router_name": current_router[CONF_ROUTER_NAME],
                 "router_host": current_router[CONF_ROUTER_HOST],
+            },
+        )
+
+    async def async_step_add_router(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Add a new router to the existing configuration."""
+        errors = {}
+
+        if user_input is not None:
+            try:
+                # Validate the new router connection
+                info = await validate_router_connection(self.hass, user_input)
+
+                # Get current routers and add the new one
+                routers = list(self.config_entry.data[CONF_ROUTERS])
+
+                # Check if router already exists
+                for existing_router in routers:
+                    if existing_router[CONF_ROUTER_HOST] == user_input[CONF_HOST]:
+                        errors["base"] = "already_configured"
+                        break
+                else:
+                    # Add new router configuration
+                    new_router = {
+                        CONF_ROUTER_HOST: user_input[CONF_HOST],
+                        CONF_ROUTER_NAME: user_input[CONF_NAME],
+                        CONF_ROUTER_USERNAME: user_input[CONF_USERNAME],
+                        CONF_ROUTER_PASSWORD: user_input[CONF_PASSWORD],
+                        CONF_ROUTER_DESCRIPTION: user_input.get(CONF_ROUTER_DESCRIPTION, ""),
+                        CONF_ROUTER_USE_HTTPS: info["use_https"],
+                        CONF_ROUTER_VERIFY_SSL: info["verify_ssl"],
+                    }
+                    routers.append(new_router)
+
+                    # Update the config entry
+                    new_data = dict(self.config_entry.data)
+                    new_data[CONF_ROUTERS] = routers
+
+                    # Update entry title to reflect new router count
+                    router_count = len(routers)
+                    plural = "s" if router_count > 1 else ""
+                    new_title = f"WrtManager ({router_count} router{plural})"
+
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry, data=new_data, title=new_title
+                    )
+
+                    # Reload the integration to apply new router
+                    await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+                    return self.async_create_entry(
+                        title="", data=self.config_entry.options  # Keep existing options unchanged
+                    )
+
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except Exception:
+                errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="add_router",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST): str,
+                    vol.Required(CONF_NAME): str,
+                    vol.Optional(CONF_USERNAME, default=DEFAULT_USERNAME): str,
+                    vol.Required(CONF_PASSWORD): str,
+                    vol.Optional(CONF_ROUTER_DESCRIPTION, default=""): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "description": "Add a new router to your WrtManager configuration:"
+            },
+        )
+
+    async def async_step_select_router_to_remove(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select router to remove from configuration."""
+        routers = self.config_entry.data.get(CONF_ROUTERS, [])
+
+        if len(routers) <= 1:
+            return self.async_abort(reason="cannot_remove_last_router")
+
+        if user_input is not None:
+            router_index = int(user_input["router"])
+            return await self.async_step_confirm_remove_router(router_index)
+
+        # Create router selection schema
+        router_options = {
+            str(i): f"{router[CONF_ROUTER_NAME]} ({router[CONF_ROUTER_HOST]})"
+            for i, router in enumerate(routers)
+        }
+
+        return self.async_show_form(
+            step_id="select_router_to_remove",
+            data_schema=vol.Schema({vol.Required("router"): vol.In(router_options)}),
+            description_placeholders={"description": "Select the router you want to remove:"},
+        )
+
+    async def async_step_confirm_remove_router(
+        self, router_index: int, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Confirm router removal."""
+        routers = list(self.config_entry.data[CONF_ROUTERS])
+        router_to_remove = routers[router_index]
+
+        if user_input is not None:
+            if user_input.get("confirm", False):
+                # Remove the router
+                routers.pop(router_index)
+
+                # Update the config entry
+                new_data = dict(self.config_entry.data)
+                new_data[CONF_ROUTERS] = routers
+
+                # Update entry title to reflect new router count
+                router_count = len(routers)
+                plural = "s" if router_count > 1 else ""
+                new_title = f"WrtManager ({router_count} router{plural})"
+
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data=new_data, title=new_title
+                )
+
+                # Reload the integration to remove router entities
+                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+                return self.async_create_entry(
+                    title="", data=self.config_entry.options  # Keep existing options unchanged
+                )
+            else:
+                # User cancelled, go back to main options
+                return await self.async_step_init()
+
+        return self.async_show_form(
+            step_id="confirm_remove_router",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("confirm", default=False): bool,
+                }
+            ),
+            description_placeholders={
+                "router_name": router_to_remove[CONF_ROUTER_NAME],
+                "router_host": router_to_remove[CONF_ROUTER_HOST],
+                "description": (
+                    f"Are you sure you want to remove {router_to_remove[CONF_ROUTER_NAME]} "
+                    f"({router_to_remove[CONF_ROUTER_HOST]})?\n\n"
+                    f"This will remove all entities associated with this router."
+                ),
             },
         )
