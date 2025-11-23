@@ -171,8 +171,106 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Create the options flow."""
         return OptionsFlowHandler(config_entry)
 
+    async def async_step_add_to_existing(
+        self,
+        existing_entry: config_entries.ConfigEntry | None = None,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Add router to existing WrtManager configuration."""
+        # Get the existing entry if not provided
+        if existing_entry is None:
+            existing_entries = self._async_current_entries()
+            if not existing_entries:
+                return self.async_abort(reason="no_existing_entry")
+            existing_entry = existing_entries[0]
+
+        errors = {}
+
+        if user_input is not None:
+            try:
+                # Validate the new router connection
+                info = await validate_router_connection(self.hass, user_input)
+
+                # Get current routers and check for duplicates
+                routers = list(existing_entry.data[CONF_ROUTERS])
+                for existing_router in routers:
+                    if existing_router[CONF_ROUTER_HOST] == user_input[CONF_HOST]:
+                        errors["base"] = ERROR_ALREADY_CONFIGURED
+                        break
+                else:
+                    # Add new router configuration
+                    new_router = {
+                        CONF_ROUTER_HOST: user_input[CONF_HOST],
+                        CONF_ROUTER_NAME: user_input[CONF_NAME],
+                        CONF_ROUTER_USERNAME: user_input[CONF_USERNAME],
+                        CONF_ROUTER_PASSWORD: user_input[CONF_PASSWORD],
+                        CONF_ROUTER_DESCRIPTION: user_input.get(CONF_ROUTER_DESCRIPTION, ""),
+                        CONF_ROUTER_USE_HTTPS: info["use_https"],
+                        CONF_ROUTER_VERIFY_SSL: info["verify_ssl"],
+                    }
+                    routers.append(new_router)
+
+                    # Update the existing config entry
+                    new_data = dict(existing_entry.data)
+                    new_data[CONF_ROUTERS] = routers
+
+                    # Update entry title to reflect new router count
+                    router_count = len(routers)
+                    plural = "s" if router_count > 1 else ""
+                    new_title = f"WrtManager ({router_count} router{plural})"
+
+                    self.hass.config_entries.async_update_entry(
+                        existing_entry, data=new_data, title=new_title
+                    )
+
+                    # Reload the integration to apply new router
+                    await self.hass.config_entries.async_reload(existing_entry.entry_id)
+
+                    return self.async_create_entry(
+                        title="Router Added",
+                        data={},  # Empty data since we're not creating a new entry
+                    )
+
+            except CannotConnect:
+                errors["base"] = ERROR_CANNOT_CONNECT
+            except InvalidAuth:
+                errors["base"] = ERROR_INVALID_AUTH
+            except Exception:
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = ERROR_UNKNOWN
+
+        return self.async_show_form(
+            step_id="add_to_existing",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST): str,
+                    vol.Required(CONF_NAME): str,
+                    vol.Optional(CONF_USERNAME, default=DEFAULT_USERNAME): str,
+                    vol.Required(CONF_PASSWORD): str,
+                    vol.Optional(CONF_ROUTER_DESCRIPTION, default=""): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "description": (
+                    f"WrtManager is already configured with "
+                    f"{len(existing_entry.data[CONF_ROUTERS])} router(s). "
+                    f"Add another router to your existing configuration:"
+                ),
+                "existing_routers": ", ".join(
+                    [r[CONF_ROUTER_NAME] for r in existing_entry.data[CONF_ROUTERS]]
+                ),
+            },
+        )
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
+        # Check if WrtManager is already configured
+        existing_entries = self._async_current_entries()
+        if existing_entries:
+            # If there's already a WrtManager entry, redirect to add router flow
+            return await self.async_step_add_to_existing(existing_entries[0], user_input)
+
         errors: dict[str, str] = {}
         description_placeholders = {}
 

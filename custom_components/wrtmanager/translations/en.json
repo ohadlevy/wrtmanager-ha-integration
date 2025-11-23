@@ -25,6 +25,24 @@
         "data": {
           "add_more": "Add another router"
         }
+      },
+      "add_to_existing": {
+        "title": "Add Router to Existing Configuration",
+        "description": "{description}\n\nExisting routers: {existing_routers}",
+        "data": {
+          "host": "Hostname or IP Address",
+          "name": "Router Name",
+          "username": "Username (default: hass)",
+          "password": "Password",
+          "description": "Description (optional)"
+        },
+        "data_description": {
+          "host": "Enter the hostname or IP address of your OpenWrt router",
+          "name": "A friendly name for this router (e.g., 'Main Router', 'Living Room AP')",
+          "username": "Username for ubus authentication (should be 'hass' if you used our setup script)",
+          "password": "Password for ubus authentication",
+          "description": "Optional description for this router"
+        }
       }
     },
     "error": {
@@ -35,7 +53,8 @@
     },
     "abort": {
       "already_configured": "This router is already configured.",
-      "single_instance_allowed": "Only one WrtManager instance is allowed."
+      "single_instance_allowed": "Only one WrtManager instance is allowed.",
+      "no_existing_entry": "No existing WrtManager configuration found. Please add your first router through the initial setup."
     }
   },
   "options": {
