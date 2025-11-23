@@ -27,10 +27,14 @@ from .const import (
     ATTR_SIGNAL_DBM,
     ATTR_VENDOR,
     ATTR_VLAN_ID,
+    CONF_ROUTER_USE_HTTPS,
+    CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
     DATA_SOURCE_DYNAMIC_DHCP,
     DATA_SOURCE_STATIC_DHCP,
     DATA_SOURCE_WIFI_ONLY,
+    DEFAULT_USE_HTTPS,
+    DEFAULT_VERIFY_SSL,
     DOMAIN,
     ROAMING_DETECTION_THRESHOLD,
     ROAMING_SIGNAL_HYSTERESIS,
@@ -68,6 +72,8 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 username=router_config[CONF_USERNAME],
                 password=router_config[CONF_PASSWORD],
                 timeout=10,
+                use_https=router_config.get(CONF_ROUTER_USE_HTTPS, DEFAULT_USE_HTTPS),
+                verify_ssl=router_config.get(CONF_ROUTER_VERIFY_SSL, DEFAULT_VERIFY_SSL),
             )
             self.routers[host] = client
 

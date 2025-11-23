@@ -196,10 +196,27 @@ echo "Step 8: Testing authentication and API access..."
 # Get router's IP address
 ROUTER_IP=$(run_on_router "ip addr show br-lan | grep 'inet ' | head -1 | awk '{print \$2}' | cut -d'/' -f1" 2>/dev/null || echo "$ROUTER_HOST")
 
-echo "Testing HTTP ubus authentication on $ROUTER_IP..."
+# Auto-detect HTTP vs HTTPS
+echo "Auto-detecting HTTP/HTTPS protocol..."
+PROTOCOL="http"
+
+# Try HTTPS first (more secure)
+HTTPS_TEST=$(curl -s -k -X POST "https://$ROUTER_IP/ubus" \
+    -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"call\",\"params\":[\"00000000000000000000000000000000\",\"session\",\"login\",{\"username\":\"hass\",\"password\":\"$HASS_PASSWORD\"}]}" \
+    2>/dev/null || echo "HTTPS_FAILED")
+
+if echo "$HTTPS_TEST" | grep -q '"ubus_rpc_session"'; then
+    PROTOCOL="https"
+    echo "✅ Router is using HTTPS"
+else
+    echo "→ HTTPS not available, using HTTP"
+fi
+
+echo "Testing $PROTOCOL ubus authentication on $ROUTER_IP..."
 
 # Test authentication
-RESPONSE=$(curl -s -X POST "http://$ROUTER_IP/ubus" \
+RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
     -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"call\",\"params\":[\"00000000000000000000000000000000\",\"session\",\"login\",{\"username\":\"hass\",\"password\":\"$HASS_PASSWORD\"}]}" \
     2>/dev/null || echo "CURL_FAILED")
@@ -214,7 +231,7 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
 
     # Test iwinfo devices call (required for WrtManager)
     echo "Testing iwinfo devices API call..."
-    TEST_RESPONSE=$(curl -s -X POST "http://$ROUTER_IP/ubus" \
+    TEST_RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
         -H "Content-Type: application/json" \
         -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"call\",\"params\":[\"$SESSION_ID\",\"iwinfo\",\"devices\",{}]}" \
         2>/dev/null || echo "TEST_FAILED")
@@ -226,7 +243,7 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
         FIRST_DEVICE=$(echo "$TEST_RESPONSE" | grep -o '"[^"]*phy[^"]*"' | head -1 | tr -d '"')
         if [ -n "$FIRST_DEVICE" ]; then
             echo "Testing iwinfo assoclist on $FIRST_DEVICE..."
-            ASSOC_RESPONSE=$(curl -s -X POST "http://$ROUTER_IP/ubus" \
+            ASSOC_RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
                 -H "Content-Type: application/json" \
                 -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"call\",\"params\":[\"$SESSION_ID\",\"iwinfo\",\"assoclist\",{\"device\":\"$FIRST_DEVICE\"}]}" \
                 2>/dev/null)
@@ -239,7 +256,7 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
 
             # Test hostapd get_clients (official HA method)
             echo "Testing hostapd get_clients on hostapd.$FIRST_DEVICE..."
-            HOSTAPD_RESPONSE=$(curl -s -X POST "http://$ROUTER_IP/ubus" \
+            HOSTAPD_RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
                 -H "Content-Type: application/json" \
                 -d "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"call\",\"params\":[\"$SESSION_ID\",\"hostapd.$FIRST_DEVICE\",\"get_clients\",{}]}" \
                 2>/dev/null)
@@ -257,7 +274,7 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
 
     # Test DHCP leases call (optional - only works on DHCP servers, not APs)
     echo "Testing DHCP leases API call..."
-    DHCP_RESPONSE=$(curl -s -X POST "http://$ROUTER_IP/ubus" \
+    DHCP_RESPONSE=$(curl -s $([ "$PROTOCOL" = "https" ] && echo "-k") -X POST "${PROTOCOL}://$ROUTER_IP/ubus" \
         -H "Content-Type: application/json" \
         -d "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"call\",\"params\":[\"$SESSION_ID\",\"dhcp\",\"ipv4leases\",{}]}" \
         2>/dev/null || echo "DHCP_FAILED")
@@ -287,7 +304,8 @@ echo "Router configuration summary:"
 echo "  Router: $ROUTER_HOST ($ROUTER_IP)"
 echo "  Username: hass"
 echo "  Password: [configured]"
-echo "  HTTP ubus endpoint: http://$ROUTER_IP/ubus"
+echo "  Protocol: ${PROTOCOL^^}"
+echo "  ubus endpoint: ${PROTOCOL}://$ROUTER_IP/ubus"
 echo ""
 echo "To configure this router in WrtManager:"
 echo "  1. Add the WrtManager integration in Home Assistant"

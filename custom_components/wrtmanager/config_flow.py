@@ -18,9 +18,13 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_ROUTER_DESCRIPTION,
+    CONF_ROUTER_USE_HTTPS,
+    CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
     CONF_VLAN_NAMES,
+    DEFAULT_USE_HTTPS,
     DEFAULT_USERNAME,
+    DEFAULT_VERIFY_SSL,
     DOMAIN,
     ERROR_ALREADY_CONFIGURED,
     ERROR_CANNOT_CONNECT,
@@ -46,11 +50,43 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 async def validate_router_connection(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate that we can connect to the router and authenticate."""
+    # Try to auto-detect HTTPS by attempting connection with both protocols
+    use_https = data.get(CONF_ROUTER_USE_HTTPS, DEFAULT_USE_HTTPS)
+    verify_ssl = data.get(CONF_ROUTER_VERIFY_SSL, DEFAULT_VERIFY_SSL)
+
+    # If use_https not explicitly set, try auto-detection
+    if CONF_ROUTER_USE_HTTPS not in data:
+        _LOGGER.debug("Auto-detecting HTTP/HTTPS for %s", data[CONF_HOST])
+
+        # Try HTTPS first (more secure)
+        try:
+            https_client = UbusClient(
+                host=data[CONF_HOST],
+                username=data[CONF_USERNAME],
+                password=data[CONF_PASSWORD],
+                timeout=5,
+                use_https=True,
+                verify_ssl=False,  # Assume self-signed cert during auto-detection
+            )
+            session_id = await https_client.authenticate()
+            await https_client.close()
+
+            if session_id:
+                _LOGGER.info("Auto-detected HTTPS for router %s", data[CONF_HOST])
+                use_https = True
+                verify_ssl = False  # Keep verify_ssl=False for self-signed certs
+        except Exception as ex:
+            _LOGGER.debug("HTTPS connection failed for %s: %s - trying HTTP", data[CONF_HOST], ex)
+            use_https = False
+
+    # Now create the actual client with detected/configured protocol
     ubus_client = UbusClient(
         host=data[CONF_HOST],
         username=data[CONF_USERNAME],
         password=data[CONF_PASSWORD],
         timeout=10,
+        use_https=use_https,
+        verify_ssl=verify_ssl,
     )
 
     try:
@@ -93,6 +129,8 @@ async def validate_router_connection(hass: HomeAssistant, data: dict[str, Any]) 
                 else "Unknown"
             ),
             "router_type": router_type,
+            "use_https": use_https,  # Return detected protocol
+            "verify_ssl": verify_ssl,
             "capabilities": {
                 "wireless": len(devices) if devices else 0,
                 "dhcp": dhcp_capability,
@@ -137,7 +175,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 # Validate connection and get router info
-                await validate_router_connection(self.hass, user_input)
+                info = await validate_router_connection(self.hass, user_input)
 
                 # Check for existing config entries to prevent duplicates
                 for entry in self._async_current_entries():
@@ -149,13 +187,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         break
 
                 if not errors:
-                    # Add router to our list
+                    # Add router to our list with detected protocol settings
                     router_config = {
                         CONF_HOST: user_input[CONF_HOST],
                         CONF_NAME: user_input[CONF_NAME],
                         CONF_USERNAME: user_input[CONF_USERNAME],
                         CONF_PASSWORD: user_input[CONF_PASSWORD],
                         CONF_ROUTER_DESCRIPTION: user_input.get(CONF_ROUTER_DESCRIPTION, ""),
+                        CONF_ROUTER_USE_HTTPS: info["use_https"],
+                        CONF_ROUTER_VERIFY_SSL: info["verify_ssl"],
                     }
                     self._routers.append(router_config)
 

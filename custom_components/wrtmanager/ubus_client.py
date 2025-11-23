@@ -31,7 +31,7 @@ class UbusConnectionError(UbusClientError):
 
 
 class UbusClient:
-    """Client for communicating with OpenWrt ubus over HTTP."""
+    """Client for communicating with OpenWrt ubus over HTTP/HTTPS."""
 
     def __init__(
         self,
@@ -39,13 +39,18 @@ class UbusClient:
         username: str = "hass",
         password: str = "",
         timeout: int = 10,
+        use_https: bool = False,
+        verify_ssl: bool = False,
     ) -> None:
         """Initialize the ubus client."""
         self.host = host
         self.username = username
         self.password = password
         self.timeout = timeout
-        self.base_url = f"http://{host}/ubus"
+        self.use_https = use_https
+        self.verify_ssl = verify_ssl
+        protocol = "https" if use_https else "http"
+        self.base_url = f"{protocol}://{host}/ubus"
         self._session: Optional[aiohttp.ClientSession] = None
 
     async def authenticate(self) -> Optional[str]:
@@ -98,7 +103,9 @@ class UbusClient:
                     return result[1]  # Return the data part
                 else:
                     _LOGGER.warning(
-                        "ubus call %s.%s failed with status %s (common codes: 1=Invalid command, 2=Invalid argument, 3=Method not found, 4=Not found, 6=Permission denied)",
+                        "ubus call %s.%s failed with status %s "
+                        "(common codes: 1=Invalid command, 2=Invalid argument, "
+                        "3=Method not found, 4=Not found, 6=Permission denied)",
                         service,
                         method,
                         status_code,
@@ -117,7 +124,9 @@ class UbusClient:
                     return None
                 else:
                     _LOGGER.warning(
-                        "ubus call %s.%s failed with error code %s (common codes: 1=Invalid command, 2=Invalid argument, 3=Method not found, 4=Not found, 6=Permission denied)",
+                        "ubus call %s.%s failed with error code %s "
+                        "(common codes: 1=Invalid command, 2=Invalid argument, "
+                        "3=Method not found, 4=Not found, 6=Permission denied)",
                         service,
                         method,
                         error_code,
@@ -168,9 +177,20 @@ class UbusClient:
         return result if result else None
 
     async def _make_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Make HTTP request to ubus endpoint."""
+        """Make HTTP/HTTPS request to ubus endpoint."""
         if not self._session:
-            self._session = aiohttp.ClientSession()
+            # Create SSL context for HTTPS connections
+            ssl_context = None
+            if self.use_https and not self.verify_ssl:
+                # Disable SSL verification for self-signed certificates
+                import ssl
+
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+
+            connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+            self._session = aiohttp.ClientSession(connector=connector)
 
         try:
             async with async_timeout.timeout(self.timeout):
@@ -182,7 +202,10 @@ class UbusClient:
                     if response.status != 200:
                         error_text = await response.text()
                         if response.status == 403:
-                            error_msg = f"HTTP 403 Forbidden - Check if 'hass' user has proper ACL permissions on {self.host}"
+                            error_msg = (
+                                f"HTTP 403 Forbidden - Check if 'hass' user has "
+                                f"proper ACL permissions on {self.host}"
+                            )
                         elif response.status == 404:
                             error_msg = (
                                 f"HTTP 404 Not Found - ubus endpoint not available on {self.host}"
