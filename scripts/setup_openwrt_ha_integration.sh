@@ -175,8 +175,24 @@ run_on_router "
     uci commit rpcd
 "
 
-# 6. Create ACL permissions file
-echo "Step 6: Setting up access control permissions..."
+# 6. Detect DHCP capability and create appropriate ACL permissions
+echo "Step 6: Detecting DHCP capability and setting up access control permissions..."
+
+# Check if this router has DHCP configured
+DHCP_ENABLED=$(run_on_router "
+    # Check if any DHCP section exists in the config
+    uci show dhcp 2>/dev/null | grep -E 'dhcp\\..*=dhcp' >/dev/null && echo 'yes' || echo 'no'
+")
+
+if [[ "$DHCP_ENABLED" == "yes" ]]; then
+    echo "DHCP detected - configuring full permissions including luci-rpc"
+    LUCI_RPC_PERMISSION=',
+                "luci-rpc": [ "getDHCPLeases" ]'
+else
+    echo "No DHCP detected - configuring basic permissions without luci-rpc"
+    LUCI_RPC_PERMISSION=''
+fi
+
 run_on_router "
     mkdir -p /usr/share/rpcd/acl.d
 
@@ -192,7 +208,7 @@ run_on_router "
                 \"uci\": [ \"get\" ],
                 \"network.wireless\": [ \"status\" ],
                 \"network.device\": [ \"status\" ],
-                \"dhcp\": [ \"ipv4leases\", \"ipv6leases\" ]
+                \"dhcp\": [ \"ipv4leases\", \"ipv6leases\" ]$LUCI_RPC_PERMISSION
             }
         },
         \"write\": {
@@ -301,18 +317,31 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
         echo "   This may affect device discovery in WrtManager"
     fi
 
-    # Test DHCP leases call (optional - only works on DHCP servers, not APs)
+    # Test DHCP leases call using the same conditional method as our integration
     echo "Testing DHCP leases API call..."
-    DHCP_RESPONSE=$(call_ubus_api "$SESSION_ID" "dhcp" "ipv4leases" "{}" 5)
-    if [[ -z "$DHCP_RESPONSE" ]]; then
-        DHCP_RESPONSE="DHCP_FAILED"
-    fi
+    if [[ "$DHCP_ENABLED" == "yes" ]]; then
+        # First try luci-rpc method (should work now with new permissions)
+        echo "Testing luci-rpc.getDHCPLeases (preferred method)..."
+        DHCP_RESPONSE=$(call_ubus_api "$SESSION_ID" "luci-rpc" "getDHCPLeases" "{\"family\":4}" 5)
 
-    if echo "$DHCP_RESPONSE" | grep -q '"device"'; then
-        echo "✅ DHCP API access working!"
+        if echo "$DHCP_RESPONSE" | grep -q '"dhcp_leases"'; then
+            echo "✅ luci-rpc DHCP API working!"
+            LEASE_COUNT=$(echo "$DHCP_RESPONSE" | grep -o '"dhcp_leases":\[' | wc -l)
+            if [[ "$LEASE_COUNT" -gt 0 ]]; then
+                echo "   Found DHCP lease data - device IP/hostname resolution available!"
+            fi
+        else
+            echo "⚠️  luci-rpc failed, testing fallback dhcp.ipv4leases..."
+            FALLBACK_RESPONSE=$(call_ubus_api "$SESSION_ID" "dhcp" "ipv4leases" "{}" 6)
+            if echo "$FALLBACK_RESPONSE" | grep -q '"device"'; then
+                echo "✅ Fallback DHCP API working!"
+            else
+                echo "⚠️  Both DHCP methods failed - IP/hostname resolution may be limited"
+            fi
+        fi
     else
-        echo "ℹ️  DHCP API not available (normal for APs)"
-        echo "   Device IP addresses will be detected via ARP instead"
+        echo "ℹ️  No DHCP configured on this router (Access Point mode)"
+        echo "   Device IP addresses will be detected from other routers"
     fi
 
 else

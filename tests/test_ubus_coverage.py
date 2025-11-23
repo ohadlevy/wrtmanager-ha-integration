@@ -109,12 +109,51 @@ async def test_get_device_associations_empty():
 
 @pytest.mark.asyncio
 async def test_get_dhcp_leases_success():
-    """Test getting DHCP leases successfully."""
+    """Test getting DHCP leases successfully via luci-rpc."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
-    response = {
+    # Mock successful luci-rpc response
+    luci_response = {
         "jsonrpc": "2.0",
         "id": 4,
+        "result": [
+            0,
+            {
+                "dhcp_leases": [
+                    {
+                        "macaddr": "CC:8C:BF:0A:B7:F4",
+                        "ipaddr": "192.168.1.100",
+                        "hostname": "gree-ac",
+                    }
+                ]
+            },
+        ],
+    }
+
+    with aioresponses() as m:
+        m.post("http://192.168.1.1/ubus", payload=luci_response, status=200)
+
+        leases = await client.get_dhcp_leases("test_session")
+        assert leases is not None
+        assert "dhcp_leases" in leases
+        assert len(leases["dhcp_leases"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_dhcp_leases_fallback_success():
+    """Test getting DHCP leases successfully via fallback method."""
+    client = UbusClient("192.168.1.1", "hass", "password")
+
+    # Mock luci-rpc access denied, then dhcp.ipv4leases success
+    luci_denied_response = {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "error": {"code": -32002, "message": "Access denied"},
+    }
+
+    dhcp_response = {
+        "jsonrpc": "2.0",
+        "id": 5,
         "result": [
             0,
             {
@@ -133,7 +172,10 @@ async def test_get_dhcp_leases_success():
     }
 
     with aioresponses() as m:
-        m.post("http://192.168.1.1/ubus", payload=response, status=200)
+        # First call (luci-rpc) returns access denied
+        m.post("http://192.168.1.1/ubus", payload=luci_denied_response, status=200)
+        # Second call (dhcp.ipv4leases) returns success
+        m.post("http://192.168.1.1/ubus", payload=dhcp_response, status=200)
 
         leases = await client.get_dhcp_leases("test_session")
         assert leases is not None
