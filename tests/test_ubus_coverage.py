@@ -1,5 +1,6 @@
 """Comprehensive tests for UbusClient coverage."""
 
+import asyncio
 import json
 
 # Import UbusClient directly from the file
@@ -30,6 +31,8 @@ async def ubus_client():
         yield client
     finally:
         await client.close()
+        # Small delay to allow background threads to finish
+        await asyncio.sleep(0.1)
 
 
 @pytest.mark.asyncio

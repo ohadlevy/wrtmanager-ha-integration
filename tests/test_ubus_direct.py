@@ -1,5 +1,6 @@
 """Direct tests for UbusClient without any HA dependencies."""
 
+import asyncio
 import json
 
 # Import UbusClient directly from the file
@@ -31,6 +32,8 @@ async def ubus_client():
         yield client
     finally:
         await client.close()
+        # Small delay to allow background threads to finish
+        await asyncio.sleep(0.1)
 
 
 @pytest_asyncio.fixture
@@ -41,6 +44,8 @@ async def https_ubus_client():
         yield client
     finally:
         await client.close()
+        # Small delay to allow background threads to finish
+        await asyncio.sleep(0.1)
 
 
 @pytest_asyncio.fixture
@@ -51,6 +56,8 @@ async def ubus_client_wrong_password():
         yield client
     finally:
         await client.close()
+        # Small delay to allow background threads to finish
+        await asyncio.sleep(0.1)
 
 
 @pytest.mark.asyncio
@@ -81,24 +88,19 @@ async def test_authentication_success(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_authentication_failure():
+async def test_authentication_failure(ubus_client_wrong_password):
     """Test authentication failure."""
-    client = UbusClient("192.168.1.1", "hass", "wrong_password")
-
     auth_response = {
         "jsonrpc": "2.0",
         "id": 1,
         "result": [1, {}],  # Error code 1 = authentication failed
     }
 
-    try:
-        with aioresponses() as m:
-            m.post("http://192.168.1.1/ubus", payload=auth_response, status=200)
+    with aioresponses() as m:
+        m.post("http://192.168.1.1/ubus", payload=auth_response, status=200)
 
-            with pytest.raises(UbusAuthenticationError):
-                await client.authenticate()
-    finally:
-        await client.close()
+        with pytest.raises(UbusAuthenticationError):
+            await ubus_client_wrong_password.authenticate()
 
 
 @pytest.mark.asyncio
