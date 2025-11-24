@@ -50,7 +50,7 @@ async def ubus_client():
 
 
 @pytest.mark.asyncio
-async def test_get_wireless_devices_success(ubus_client):
+async def test_get_wireless_devices_success(ubus_client, expected_lingering_threads):
     """Test getting wireless devices successfully."""
     response = {
         "jsonrpc": "2.0",
@@ -82,7 +82,7 @@ async def test_get_wireless_devices_error(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_device_associations_success(ubus_client):
+async def test_get_device_associations_success(ubus_client, expected_lingering_threads):
     """Test getting device associations successfully."""
 
     response = {
