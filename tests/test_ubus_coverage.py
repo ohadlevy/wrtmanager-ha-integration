@@ -130,7 +130,7 @@ async def test_get_device_associations_empty(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_dhcp_leases_success(ubus_client):
+async def test_get_dhcp_leases_success(ubus_client, expected_lingering_threads):
     """Test getting DHCP leases successfully via luci-rpc."""
 
     # Mock successful luci-rpc response
