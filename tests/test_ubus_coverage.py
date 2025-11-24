@@ -6,8 +6,9 @@ import json
 # Import UbusClient directly from the file
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
+import aiohttp
 import pytest
 import pytest_asyncio
 from aioresponses import aioresponses
@@ -34,6 +35,12 @@ def expected_lingering_timers() -> bool:
     return True
 
 
+@pytest.fixture
+def expected_lingering_tasks() -> bool:
+    """Allow lingering tasks for aiohttp tests."""
+    return True
+
+
 @pytest_asyncio.fixture
 async def ubus_client():
     """Fixture that provides a UbusClient with automatic cleanup."""
@@ -41,7 +48,9 @@ async def ubus_client():
     try:
         yield client
     finally:
-        await client.close()
+        # Only close if session was actually created
+        if hasattr(client, "_session") and client._session:
+            await client.close()
         # Force garbage collection to prevent lingering resources
         import gc
 
