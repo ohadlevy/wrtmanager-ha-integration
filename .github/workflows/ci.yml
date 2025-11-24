@@ -152,8 +152,12 @@ jobs:
         echo "Running bandit scan..." && bandit -r custom_components/ -f json -o bandit-report.json &
         PID2=$!
 
-        wait $PID1 && echo "✅ Safety check passed" || echo "⚠️ Safety issues found"
-        wait $PID2 && echo "✅ Bandit scan completed"
+        # Wait for both processes and collect exit codes
+        wait $PID1 && echo "✅ Safety check passed" || { echo "⚠️ Safety issues found" && EXIT_CODE=1; }
+        wait $PID2 && echo "✅ Bandit scan completed" || { echo "❌ Bandit scan failed" && EXIT_CODE=1; }
+
+        # Exit with proper code
+        exit ${EXIT_CODE:-0}
 
     - name: Upload bandit results
       uses: actions/upload-artifact@v4
