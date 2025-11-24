@@ -120,6 +120,28 @@ async def async_setup_entry(
                 list(wireless_interfaces),
             )
 
+        # Create traffic sensors for network interfaces
+        if coordinator.data and "interfaces" in coordinator.data:
+            router_interfaces = coordinator.data["interfaces"].get(router_host, {})
+
+            for interface_name, interface_data in router_interfaces.items():
+                # Only create sensors for interfaces with statistics
+                if interface_data.get("statistics"):
+                    # Create download sensor
+                    entities.append(
+                        WrtManagerInterfaceDownloadSensor(
+                            coordinator, router_host, router_name, interface_name
+                        )
+                    )
+                    # Create upload sensor
+                    entities.append(
+                        WrtManagerInterfaceUploadSensor(
+                            coordinator, router_host, router_name, interface_name
+                        )
+                    )
+
+            _LOGGER.info("Created traffic sensors for %s interfaces", len(router_interfaces))
+
     async_add_entities(entities)
     _LOGGER.info("Set up %d sensors for %d routers", len(entities), len(routers))
 
@@ -187,6 +209,66 @@ class WrtManagerSensorBase(CoordinatorEntity[WrtManagerCoordinator], SensorEntit
     def available(self) -> bool:
         """Return if entity is available."""
         return self.coordinator.last_update_success and bool(self._get_system_data())
+
+    @staticmethod
+    def _is_wan_interface(interface_name: str) -> bool:
+        """Check if interface is a WAN/internet interface."""
+        lower_name = interface_name.lower()
+        wan_patterns = ["wan", "pppoe", "eth0.2", "eth1", "internet", "modem"]
+        return any(pattern in lower_name for pattern in wan_patterns)
+
+    @staticmethod
+    def _get_friendly_interface_name(interface_name: str) -> str:
+        """Get a human-friendly interface name."""
+        lower_name = interface_name.lower()
+
+        # WAN/Internet interfaces
+        if "pppoe" in lower_name:
+            return f"{interface_name} (Internet)"
+        elif "wan" in lower_name or "eth0.2" in lower_name or "eth1" in lower_name:
+            return f"{interface_name} (WAN)"
+
+        # Wireless interfaces
+        if "phy" in lower_name and "ap" in lower_name:
+            return f"{interface_name} (WiFi)"
+        elif interface_name.startswith("wlan"):
+            return f"{interface_name} (WiFi)"
+
+        # Ethernet interfaces
+        elif interface_name.startswith("eth"):
+            return f"{interface_name} (Ethernet)"
+
+        # Bridge interfaces
+        elif interface_name.startswith("br-"):
+            return f"{interface_name} (Bridge)"
+
+        # Default
+        return interface_name
+
+    @staticmethod
+    def _get_interface_icon(interface_name: str, direction: str = "download") -> str:
+        """Get appropriate icon for interface type and direction."""
+        lower_name = interface_name.lower()
+        is_download = direction == "download"
+
+        # WAN/Internet interfaces
+        if "pppoe" in lower_name or "wan" in lower_name:
+            return "mdi:download" if is_download else "mdi:upload"
+
+        # Wireless interfaces
+        if "phy" in lower_name or "wlan" in lower_name:
+            return "mdi:wifi-arrow-down" if is_download else "mdi:wifi-arrow-up"
+
+        # Default network icon
+        return "mdi:download-network" if is_download else "mdi:upload-network"
+
+    def _get_interface_data_by_name(self, interface_name: str) -> Dict[str, Any] | None:
+        """Get interface data from coordinator by interface name."""
+        if not self.coordinator.data or "interfaces" not in self.coordinator.data:
+            return None
+
+        router_interfaces = self.coordinator.data["interfaces"].get(self._router_host, {})
+        return router_interfaces.get(interface_name)
 
 
 class WrtManagerMemoryUsageSensor(WrtManagerSensorBase):
@@ -508,3 +590,113 @@ class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
             return "Fair"
         else:
             return "Poor"
+
+
+class WrtManagerInterfaceDownloadSensor(WrtManagerSensorBase):
+    """Sensor for interface download traffic."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        router_host: str,
+        router_name: str,
+        interface_name: str,
+    ):
+        """Initialize the interface download sensor."""
+        safe_interface = interface_name.replace(".", "_").replace("-", "_")
+        sensor_type = f"{safe_interface}_download"
+        sensor_name = f"{self._get_friendly_interface_name(interface_name)} Download"
+
+        super().__init__(coordinator, router_host, router_name, sensor_type, sensor_name)
+        self._interface_name = interface_name
+        self._attr_device_class = SensorDeviceClass.DATA_SIZE
+        self._attr_native_unit_of_measurement = UNIT_MEGABYTES
+        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_icon = self._get_interface_icon(interface_name, "download")
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return download traffic in MB."""
+        interface_data = self._get_interface_data_by_name(self._interface_name)
+        if not interface_data:
+            return None
+
+        stats = interface_data.get("statistics", {})
+        rx_bytes = stats.get("rx_bytes", 0)
+
+        if rx_bytes:
+            # Convert bytes to MB
+            return round(rx_bytes / (1024 * 1024), 2)
+        return 0
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return additional state attributes."""
+        interface_data = self._get_interface_data_by_name(self._interface_name)
+        if not interface_data:
+            return {}
+
+        stats = interface_data.get("statistics", {})
+        return {
+            "interface": self._interface_name,
+            "interface_type": interface_data.get("type"),
+            "rx_packets": stats.get("rx_packets", 0),
+            "rx_errors": stats.get("rx_errors", 0),
+            "rx_bytes": stats.get("rx_bytes", 0),
+            "is_wan": self._is_wan_interface(self._interface_name),
+        }
+
+
+class WrtManagerInterfaceUploadSensor(WrtManagerSensorBase):
+    """Sensor for interface upload traffic."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        router_host: str,
+        router_name: str,
+        interface_name: str,
+    ):
+        """Initialize the interface upload sensor."""
+        safe_interface = interface_name.replace(".", "_").replace("-", "_")
+        sensor_type = f"{safe_interface}_upload"
+        sensor_name = f"{self._get_friendly_interface_name(interface_name)} Upload"
+
+        super().__init__(coordinator, router_host, router_name, sensor_type, sensor_name)
+        self._interface_name = interface_name
+        self._attr_device_class = SensorDeviceClass.DATA_SIZE
+        self._attr_native_unit_of_measurement = UNIT_MEGABYTES
+        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_icon = self._get_interface_icon(interface_name, "upload")
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return upload traffic in MB."""
+        interface_data = self._get_interface_data_by_name(self._interface_name)
+        if not interface_data:
+            return None
+
+        stats = interface_data.get("statistics", {})
+        tx_bytes = stats.get("tx_bytes", 0)
+
+        if tx_bytes:
+            # Convert bytes to MB
+            return round(tx_bytes / (1024 * 1024), 2)
+        return 0
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return additional state attributes."""
+        interface_data = self._get_interface_data_by_name(self._interface_name)
+        if not interface_data:
+            return {}
+
+        stats = interface_data.get("statistics", {})
+        return {
+            "interface": self._interface_name,
+            "interface_type": interface_data.get("type"),
+            "tx_packets": stats.get("tx_packets", 0),
+            "tx_errors": stats.get("tx_errors", 0),
+            "tx_bytes": stats.get("tx_bytes", 0),
+            "is_wan": self._is_wan_interface(self._interface_name),
+        }
