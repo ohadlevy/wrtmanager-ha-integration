@@ -86,6 +86,20 @@ DEVICE_TYPE_NETWORK_EQUIPMENT = "Network Equipment"
 DEVICE_TYPE_BRIDGE = "Network Bridge"
 DEVICE_TYPE_UNKNOWN = "Unknown Device"
 
+
+# Signal quality utility function
+def classify_signal_quality(signal_dbm: float) -> str:
+    """Classify signal quality based on dBm value."""
+    if signal_dbm >= -50:
+        return "Excellent"
+    elif signal_dbm >= -60:
+        return "Good"
+    elif signal_dbm >= -70:
+        return "Fair"
+    else:
+        return "Poor"
+
+
 # Data sources
 DATA_SOURCE_STATIC_DHCP = "static_dhcp"
 DATA_SOURCE_DYNAMIC_DHCP = "dynamic_dhcp"

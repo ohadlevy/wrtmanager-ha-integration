@@ -32,6 +32,7 @@ from .const import (
     CONF_VLAN_NAMES,
     DOMAIN,
     VLAN_NAMES,
+    classify_signal_quality,
 )
 from .coordinator import WrtManagerCoordinator
 
@@ -708,15 +709,8 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
 
         # Add signal quality description
         signal = device_data.get(ATTR_SIGNAL_DBM)
-        if signal:
-            if signal >= -50:
-                signal_quality = "Excellent"
-            elif signal >= -60:
-                signal_quality = "Good"
-            elif signal >= -70:
-                signal_quality = "Fair"
-            else:
-                signal_quality = "Poor"
+        if signal is not None:
+            signal_quality = classify_signal_quality(signal)
             attributes["signal_quality"] = signal_quality
 
         return {k: v for k, v in attributes.items() if v is not None}
