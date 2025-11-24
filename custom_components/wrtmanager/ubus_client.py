@@ -344,3 +344,11 @@ class UbusClient:
                 await connector.close()
 
             self._session = None
+
+    async def __aenter__(self) -> UbusClient:
+        """Enter the async context manager."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the async context manager."""
+        await self.close()
