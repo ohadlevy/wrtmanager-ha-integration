@@ -495,6 +495,20 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
         return [device for device in self.data["devices"] if device.get(ATTR_ROUTER) == router]
 
+    @staticmethod
+    def _sanitize_config(config: Dict[str, Any]) -> Dict[str, Any]:
+        """Sanitize sensitive fields from config data before logging.
+
+        Redacts WiFi passwords and other sensitive fields to prevent
+        exposure in debug logs. Preserves None values to distinguish
+        between no password (open network) and redacted passwords.
+        """
+        sensitive_fields = ["key", "wpa_passphrase", "wpa_psk", "password"]
+        return {
+            k: "***REDACTED***" if k in sensitive_fields and v is not None else v
+            for k, v in config.items()
+        }
+
     def _extract_ssid_data(self, interfaces: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
         """Extract SSID information from wireless status data."""
         ssid_data = {}
@@ -588,6 +602,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                         )
 
                         # Extract SSID information
+                        sanitized_config = self._sanitize_config(config)
                         ssid_info = {
                             "radio": radio_name,
                             "ssid_interface": ssid_interface_name,
@@ -597,11 +612,11 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                             "network_interface": ssid_interface_data.get("ifname"),
                             "router_host": router_host,
                             "encryption": config.get("encryption"),
-                            "key": config.get("key"),  # WiFi password (if any)
+                            "key": sanitized_config.get("key"),
                             "hidden": config.get("hidden", False),
                             "isolate": config.get("isolate", False),  # client isolation
                             "network": config.get("network"),  # OpenWrt network name
-                            "full_config": config,
+                            "full_config": sanitized_config,
                         }
 
                         # Only include valid SSIDs (must have a name)
