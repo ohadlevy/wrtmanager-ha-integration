@@ -113,6 +113,11 @@ jobs:
         echo "Running pylint..."
         pylint custom_components/ --disable=all --enable=unused-import,undefined-variable && echo "✅ pylint passed" || { echo "❌ pylint failed" && EXIT_CODE=1; }
 
+        # TODO: Re-enable mypy for v1.0 - temporarily disabled for v0.8 release
+        # 22 type annotation issues need to be resolved before enabling
+        # Track: https://github.com/ohadlevy/wrtmanager-ha-integration/issues
+        # echo "Running mypy..." && mypy custom_components/ --ignore-missing-imports
+
         exit ${EXIT_CODE:-0}
 
   security:

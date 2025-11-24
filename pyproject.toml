@@ -13,6 +13,7 @@ requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.8.0",
     "async_timeout>=4.0.0",
+    "aiofiles>=23.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]

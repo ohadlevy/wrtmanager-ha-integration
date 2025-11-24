@@ -35,6 +35,37 @@ def expected_lingering_timers() -> bool:
     return True
 
 
+@pytest.fixture
+def event_loop():
+    """Create event loop with proper cleanup like asyncio.run() does.
+
+    Fixes thread cleanup issue where pytest-asyncio default fixture only calls
+    loop.close() but doesn't shutdown the default executor properly.
+    See: https://github.com/pytest-dev/pytest-asyncio/issues/222
+    """
+    import asyncio
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    yield loop
+
+    try:
+        # Cancel all running tasks (like asyncio.run() does)
+        pending = asyncio.all_tasks(loop)
+        if pending:
+            for task in pending:
+                task.cancel()
+            # Wait for task cancellations to complete
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+
+        # Shutdown async generators and default executor (like asyncio.run() does)
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.run_until_complete(loop.shutdown_default_executor())
+    finally:
+        loop.close()
+
+
 @pytest_asyncio.fixture
 async def ubus_client():
     """Fixture that provides a UbusClient with automatic cleanup."""
