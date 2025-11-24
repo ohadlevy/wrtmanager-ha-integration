@@ -37,7 +37,7 @@ class UbusClient:
         self,
         host: str,
         username: str = "hass",
-        password: str = "",
+        password: str = "",  # nosec B107
         timeout: int = 10,
         use_https: bool = False,
         verify_ssl: bool = False,
