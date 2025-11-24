@@ -42,6 +42,16 @@ def expected_lingering_tasks() -> bool:
     return True
 
 
+@pytest.fixture
+def expected_lingering_threads() -> bool:
+    """Allow lingering threads for aiohttp tests.
+
+    This specifically allows the _run_safe_shutdown_loop thread created by aiohttp
+    connectors to linger after test completion as it's cleaned up asynchronously.
+    """
+    return True
+
+
 @pytest_asyncio.fixture
 async def ubus_client():
     """Fixture that provides a UbusClient with automatic cleanup using context manager."""
