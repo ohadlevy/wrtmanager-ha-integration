@@ -9,7 +9,6 @@ import secrets
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-import async_timeout
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -281,7 +280,7 @@ class UbusClient:
             self._session = aiohttp.ClientSession(connector=connector)
 
         try:
-            async with async_timeout.timeout(self.timeout):
+            async with asyncio.timeout(self.timeout):
                 async with self._session.post(
                     self.base_url,
                     json=data,
