@@ -24,18 +24,6 @@ from ubus_client import (
 )
 
 
-@pytest.fixture
-def expected_lingering_threads() -> bool:
-    """Allow lingering threads for aiohttp tests.
-
-    This is needed because aiohttp creates background threads/timers that
-    are cleaned up asynchronously and may not finish before test teardown.
-    The _run_safe_shutdown_loop thread is expected in CI environments.
-    See: https://github.com/MatthewFlamm/pytest-homeassistant-custom-component/issues/153
-    """
-    return True
-
-
 @pytest_asyncio.fixture
 async def ubus_client():
     """Fixture that provides a UbusClient with automatic cleanup."""
@@ -73,7 +61,7 @@ async def ubus_client_wrong_password():
 
 
 @pytest.mark.asyncio
-async def test_authentication_success(ubus_client, expected_lingering_threads):
+async def test_authentication_success(ubus_client):
     """Test successful authentication."""
     auth_response = {
         "jsonrpc": "2.0",
@@ -100,7 +88,7 @@ async def test_authentication_success(ubus_client, expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_authentication_failure(ubus_client_wrong_password, expected_lingering_threads):
+async def test_authentication_failure(ubus_client_wrong_password):
     """Test authentication failure."""
     auth_response = {
         "jsonrpc": "2.0",
@@ -116,7 +104,7 @@ async def test_authentication_failure(ubus_client_wrong_password, expected_linge
 
 
 @pytest.mark.asyncio
-async def test_call_ubus_success(expected_lingering_threads):
+async def test_call_ubus_success():
     """Test successful ubus call."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
@@ -137,7 +125,7 @@ async def test_call_ubus_success(expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_close_session(expected_lingering_threads):
+async def test_close_session():
     """Test closing the session."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
@@ -158,7 +146,7 @@ async def test_close_session(expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_https_client_url(expected_lingering_threads):
+async def test_https_client_url():
     """Test that HTTPS client uses correct URL."""
     client = UbusClient("192.168.1.1", "hass", "password", use_https=True)
 
@@ -172,7 +160,7 @@ async def test_https_client_url(expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_http_client_url(expected_lingering_threads):
+async def test_http_client_url():
     """Test that HTTP client uses correct URL (default)."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
@@ -186,7 +174,7 @@ async def test_http_client_url(expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_https_authentication_success(expected_lingering_threads):
+async def test_https_authentication_success():
     """Test successful authentication with HTTPS."""
     client = UbusClient("192.168.1.1", "hass", "password", use_https=True, verify_ssl=False)
 
@@ -218,7 +206,7 @@ async def test_https_authentication_success(expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_https_call_ubus_success(expected_lingering_threads):
+async def test_https_call_ubus_success():
     """Test successful ubus call with HTTPS."""
     client = UbusClient("192.168.1.1", "hass", "password", use_https=True)
 

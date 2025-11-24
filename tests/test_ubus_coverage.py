@@ -23,18 +23,6 @@ from ubus_client import (
 )
 
 
-@pytest.fixture
-def expected_lingering_threads() -> bool:
-    """Allow lingering threads for aiohttp tests.
-
-    This is needed because aiohttp creates background threads/timers that
-    are cleaned up asynchronously and may not finish before test teardown.
-    The _run_safe_shutdown_loop thread is expected in CI environments.
-    See: https://github.com/MatthewFlamm/pytest-homeassistant-custom-component/issues/153
-    """
-    return True
-
-
 @pytest_asyncio.fixture
 async def ubus_client():
     """Fixture that provides a UbusClient with automatic cleanup."""
@@ -48,7 +36,7 @@ async def ubus_client():
 
 
 @pytest.mark.asyncio
-async def test_get_wireless_devices_success(ubus_client, expected_lingering_threads):
+async def test_get_wireless_devices_success(ubus_client):
     """Test getting wireless devices successfully."""
     response = {
         "jsonrpc": "2.0",
@@ -64,7 +52,7 @@ async def test_get_wireless_devices_success(ubus_client, expected_lingering_thre
 
 
 @pytest.mark.asyncio
-async def test_get_wireless_devices_error(ubus_client, expected_lingering_threads):
+async def test_get_wireless_devices_error(ubus_client):
     """Test getting wireless devices with error response."""
     response = {
         "jsonrpc": "2.0",
@@ -80,7 +68,7 @@ async def test_get_wireless_devices_error(ubus_client, expected_lingering_thread
 
 
 @pytest.mark.asyncio
-async def test_get_device_associations_success(ubus_client, expected_lingering_threads):
+async def test_get_device_associations_success(ubus_client):
     """Test getting device associations successfully."""
 
     response = {
@@ -111,7 +99,7 @@ async def test_get_device_associations_success(ubus_client, expected_lingering_t
 
 
 @pytest.mark.asyncio
-async def test_get_device_associations_empty(ubus_client, expected_lingering_threads):
+async def test_get_device_associations_empty(ubus_client):
     """Test getting device associations with no clients."""
 
     response = {
@@ -128,7 +116,7 @@ async def test_get_device_associations_empty(ubus_client, expected_lingering_thr
 
 
 @pytest.mark.asyncio
-async def test_get_dhcp_leases_success(ubus_client, expected_lingering_threads):
+async def test_get_dhcp_leases_success(ubus_client):
     """Test getting DHCP leases successfully via luci-rpc."""
 
     # Mock successful luci-rpc response
@@ -159,7 +147,7 @@ async def test_get_dhcp_leases_success(ubus_client, expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_get_dhcp_leases_fallback_success(ubus_client, expected_lingering_threads):
+async def test_get_dhcp_leases_fallback_success(ubus_client):
     """Test getting DHCP leases successfully via fallback method."""
 
     # Mock luci-rpc access denied, then dhcp.ipv4leases success
@@ -202,7 +190,7 @@ async def test_get_dhcp_leases_fallback_success(ubus_client, expected_lingering_
 
 
 @pytest.mark.asyncio
-async def test_get_dhcp_leases_not_available(ubus_client, expected_lingering_threads):
+async def test_get_dhcp_leases_not_available(ubus_client):
     """Test getting DHCP leases when not available (AP mode)."""
 
     response = {
@@ -219,7 +207,7 @@ async def test_get_dhcp_leases_not_available(ubus_client, expected_lingering_thr
 
 
 @pytest.mark.asyncio
-async def test_get_system_info_success(ubus_client, expected_lingering_threads):
+async def test_get_system_info_success(ubus_client):
     """Test getting system information successfully."""
 
     response = {
@@ -248,7 +236,7 @@ async def test_get_system_info_success(ubus_client, expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_get_system_info_error(ubus_client, expected_lingering_threads):
+async def test_get_system_info_error(ubus_client):
     """Test getting system information with error."""
 
     response = {
@@ -265,7 +253,7 @@ async def test_get_system_info_error(ubus_client, expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_http_error_handling(ubus_client, expected_lingering_threads):
+async def test_http_error_handling(ubus_client):
     """Test handling of HTTP errors."""
 
     with aioresponses() as m:
@@ -276,7 +264,7 @@ async def test_http_error_handling(ubus_client, expected_lingering_threads):
 
 
 @pytest.mark.asyncio
-async def test_invalid_json_handling(ubus_client, expected_lingering_threads):
+async def test_invalid_json_handling(ubus_client):
     """Test handling of invalid JSON response."""
 
     with aioresponses() as m:

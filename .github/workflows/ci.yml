@@ -50,11 +50,17 @@ jobs:
         python -m pip install --upgrade pip wheel setuptools
         pip install -e ".[dev]" --prefer-binary
 
-    # Parallel test execution with pytest-xdist
-    - name: Run tests with coverage (parallel)
+    # Optimized test execution with thread-sensitive test separation
+    - name: Run tests with coverage (optimized)
       run: |
         pip install pytest-xdist
-        pytest tests/ --cov=custom_components.wrtmanager --cov-report=xml --cov-report=term-missing -n auto --maxfail=3 --tb=short
+        # Run thread-sensitive tests sequentially (aiohttp tests that create background threads)
+        echo "Running thread-sensitive tests sequentially..."
+        pytest tests/test_ubus_direct.py tests/test_ubus_coverage.py --cov=custom_components.wrtmanager --cov-report=xml --maxfail=3 --tb=short -v
+
+        # Run remaining tests in parallel for speed
+        echo "Running remaining tests in parallel..."
+        pytest tests/ --ignore=tests/test_ubus_direct.py --ignore=tests/test_ubus_coverage.py --cov=custom_components.wrtmanager --cov-append --cov-report=term-missing -n auto --maxfail=3 --tb=short
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
