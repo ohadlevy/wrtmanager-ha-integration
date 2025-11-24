@@ -3,7 +3,9 @@
   "name": "WrtManager",
   "documentation": "https://github.com/ohadlevy/wrtmanager-ha-integration",
   "issue_tracker": "https://github.com/ohadlevy/wrtmanager-ha-integration/issues",
-  "codeowners": ["@ohadlevy"],
+  "codeowners": [
+    "@ohadlevy"
+  ],
   "config_flow": true,
   "dependencies": [],
   "requirements": [],
@@ -11,7 +13,7 @@
   "zeroconf": [],
   "dhcp": [],
   "homekit": {},
-  "version": "0.8.0",
+  "version": "0.8.1",
   "iot_class": "local_polling",
   "homeassistant": "2025.11.0"
 }
