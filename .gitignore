@@ -140,3 +140,4 @@ ieee-oui36.txt
 .env.local
 local_settings.py
 test_credentials.jsonopenwrt_data_validation.json
+bandit-report.json
