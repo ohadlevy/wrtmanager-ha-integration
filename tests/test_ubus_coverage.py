@@ -44,16 +44,9 @@ def expected_lingering_tasks() -> bool:
 
 @pytest_asyncio.fixture
 async def ubus_client():
-    """Fixture that provides a UbusClient with automatic cleanup."""
-    client = UbusClient("192.168.1.1", "hass", "password")
-    try:
+    """Fixture that provides a UbusClient with automatic cleanup using context manager."""
+    async with UbusClient("192.168.1.1", "hass", "password") as client:
         yield client
-    finally:
-        # Only close if session was actually created
-        if hasattr(client, "_session") and client._session:
-            await client.close()
-        # Force garbage collection to prevent lingering resources
-        gc.collect()
 
 
 @pytest.mark.asyncio

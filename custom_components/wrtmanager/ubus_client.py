@@ -340,3 +340,13 @@ class UbusClient:
             # Give time for internal threads to cleanup (needed for CI environments)
             await asyncio.sleep(0.25)
             self._session = None
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
+        # Give extra time for aiohttp background tasks
+        await asyncio.sleep(0.01)
