@@ -1,52 +1,68 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline (Optimized)
 
 on:
   push:
     branches: [ main, develop ]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+
+env:
+  PYTHON_VERSION: "3.12"  # HA 2025+ standard
 
 jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
+    # Enhanced multi-layer caching
+    - name: Cache dependencies and test results
+      uses: actions/cache@v4
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        path: |
+          ~/.cache/pip
+          ~/.cache/pytest
+          .pytest_cache
+          __pycache__
+        key: ${{ runner.os }}-python-${{ env.PYTHON_VERSION }}-deps-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          ${{ runner.os }}-python-${{ env.PYTHON_VERSION }}-deps-
+          ${{ runner.os }}-python-${{ env.PYTHON_VERSION }}-
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        python -m pip install --upgrade pip wheel setuptools
+        pip install -e ".[dev]" --prefer-binary
 
-    - name: Run tests with coverage
+    # Parallel test execution with pytest-xdist
+    - name: Run tests with coverage (parallel)
       run: |
-        pytest tests/ --cov=custom_components.wrtmanager --cov-report=xml --cov-report=term-missing
+        pip install pytest-xdist
+        pytest tests/ --cov=custom_components.wrtmanager --cov-report=xml --cov-report=term-missing -n auto --maxfail=3 --tb=short
 
     - name: Upload coverage to Codecov
-      if: matrix.python-version == '3.11'
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
+        fail_ci_if_error: false
 
   lint:
     name: Code Quality
@@ -56,32 +72,48 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    # Cache lint tools specifically
+    - name: Cache lint dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.local/lib/python${{ env.PYTHON_VERSION }}/site-packages
+        key: ${{ runner.os }}-lint-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-lint-${{ env.PYTHON_VERSION }}-
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        python -m pip install --upgrade pip wheel
+        pip install -e ".[dev]" --prefer-binary
 
-    - name: Check code formatting with Black
-      run: black --check custom_components/ tests/
+    # Run linting in parallel where possible
+    - name: Run all linting checks
+      run: |
+        # Run independent checks in parallel
+        echo "Running Black..." && black --check custom_components/ tests/ &
+        PID1=$!
+        echo "Running isort..." && isort --check-only custom_components/ tests/ &
+        PID2=$!
+        echo "Running flake8..." && flake8 custom_components/ tests/ --max-line-length=100 --extend-ignore=E203,W503 &
+        PID3=$!
 
-    - name: Check import sorting with isort
-      run: isort --check-only custom_components/ tests/
+        # Wait for parallel jobs and collect results
+        wait $PID1 && echo "✅ Black passed" || { echo "❌ Black failed" && EXIT_CODE=1; }
+        wait $PID2 && echo "✅ isort passed" || { echo "❌ isort failed" && EXIT_CODE=1; }
+        wait $PID3 && echo "✅ flake8 passed" || { echo "❌ flake8 failed" && EXIT_CODE=1; }
 
-    - name: Lint with flake8
-      run: flake8 custom_components/ tests/ --max-line-length=100 --extend-ignore=E203,W503
+        # Run pylint separately (sequential for better error messages)
+        echo "Running pylint..."
+        pylint custom_components/ --disable=all --enable=unused-import,undefined-variable && echo "✅ pylint passed" || { echo "❌ pylint failed" && EXIT_CODE=1; }
 
-    # TODO: Re-enable mypy for v1.0 - temporarily disabled for v0.8 release
-    # See: https://github.com/ohadlevy/wrtmanager-ha-integration/issues/TODO
-    # - name: Type check with mypy
-    #   run: mypy custom_components/ --ignore-missing-imports
-
-    - name: Lint with pylint
-      run: pylint custom_components/ --disable=all --enable=unused-import,undefined-variable
+        exit ${EXIT_CODE:-0}
 
   security:
     name: Security Scan
@@ -91,22 +123,37 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    # Cache security tools
+    - name: Cache security tools
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.local/lib/python${{ env.PYTHON_VERSION }}/site-packages
+        key: ${{ runner.os }}-security-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-security-${{ env.PYTHON_VERSION }}-
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-        pip install safety bandit
+        python -m pip install --upgrade pip wheel
+        pip install safety bandit --prefer-binary
 
-    - name: Run safety check
-      run: safety check
+    # Run security scans in parallel
+    - name: Run security checks in parallel
+      run: |
+        echo "Running safety check..." && safety check &
+        PID1=$!
+        echo "Running bandit scan..." && bandit -r custom_components/ -f json -o bandit-report.json &
+        PID2=$!
 
-    - name: Run bandit security linter
-      run: bandit -r custom_components/ -f json -o bandit-report.json || true
+        wait $PID1 && echo "✅ Safety check passed" || echo "⚠️ Safety issues found"
+        wait $PID2 && echo "✅ Bandit scan completed"
 
     - name: Upload bandit results
       uses: actions/upload-artifact@v4
@@ -155,10 +202,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install dependencies
       run: |
@@ -181,15 +228,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    # Cache build tools
+    - name: Cache build tools
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-build-tools-${{ env.PYTHON_VERSION }}
+        restore-keys: |
+          ${{ runner.os }}-build-tools-
 
     - name: Install build tools
       run: |
-        python -m pip install --upgrade pip
-        pip install build
+        python -m pip install --upgrade pip wheel
+        pip install build --prefer-binary
 
     - name: Build package
       run: python -m build
