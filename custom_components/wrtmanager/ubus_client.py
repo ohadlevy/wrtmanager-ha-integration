@@ -329,7 +329,14 @@ class UbusClient:
     async def close(self) -> None:
         """Close the HTTP session."""
         if self._session:
+            # Store connector reference before closing session
+            connector = self._session.connector
             await self._session.close()
-            # Give time for connection cleanup to prevent lingering threads
-            await asyncio.sleep(0.1)
+
+            # Properly close connector if it exists
+            if connector and not connector.closed:
+                await connector.close()
+
+            # Give time for internal threads to cleanup
+            await asyncio.sleep(0.25)
             self._session = None
