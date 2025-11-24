@@ -114,8 +114,8 @@ async def validate_router_connection(hass: HomeAssistant, data: dict[str, Any]) 
         try:
             dhcp_data = await ubus_client.get_dhcp_leases(session_id)
             dhcp_capability = dhcp_data is not None
-        except Exception:
-            pass  # DHCP not available, which is normal for APs
+        except Exception as ex:
+            _LOGGER.debug("DHCP not available for %s (normal for APs): %s", data[CONF_HOST], ex)
 
         # Determine router type based on capabilities
         router_type = "Main Router" if dhcp_capability else "Access Point"
@@ -152,8 +152,8 @@ async def validate_router_connection(hass: HomeAssistant, data: dict[str, Any]) 
         # Ensure connection is closed
         try:
             await ubus_client.close()
-        except Exception:
-            pass
+        except Exception as ex:
+            _LOGGER.debug("Error closing ubus client connection: %s", ex)
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
