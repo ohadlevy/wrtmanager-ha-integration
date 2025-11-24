@@ -25,23 +25,6 @@ from ubus_client import (
 )
 
 
-@pytest.fixture
-def expected_lingering_timers() -> bool:
-    """Allow lingering timers for aiohttp tests.
-
-    This is needed because aiohttp creates background threads/timers that
-    are cleaned up asynchronously and may not finish before test teardown.
-    See: https://github.com/MatthewFlamm/pytest-homeassistant-custom-component/issues/153
-    """
-    return True
-
-
-@pytest.fixture
-def expected_lingering_tasks() -> bool:
-    """Allow lingering tasks for aiohttp tests."""
-    return True
-
-
 @pytest_asyncio.fixture
 async def ubus_client():
     """Fixture that provides a UbusClient with automatic cleanup using context manager."""
@@ -50,7 +33,7 @@ async def ubus_client():
 
 
 @pytest.mark.asyncio
-async def test_get_wireless_devices_success(ubus_client, expected_lingering_threads):
+async def test_get_wireless_devices_success(ubus_client):
     """Test getting wireless devices successfully."""
     response = {
         "jsonrpc": "2.0",
@@ -82,7 +65,7 @@ async def test_get_wireless_devices_error(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_device_associations_success(ubus_client, expected_lingering_threads):
+async def test_get_device_associations_success(ubus_client):
     """Test getting device associations successfully."""
 
     response = {
@@ -130,7 +113,7 @@ async def test_get_device_associations_empty(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_dhcp_leases_success(ubus_client, expected_lingering_threads):
+async def test_get_dhcp_leases_success(ubus_client):
     """Test getting DHCP leases successfully via luci-rpc."""
 
     # Mock successful luci-rpc response

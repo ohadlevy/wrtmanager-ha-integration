@@ -25,17 +25,6 @@ from ubus_client import (
 )
 
 
-@pytest.fixture
-def expected_lingering_timers() -> bool:
-    """Allow lingering timers for aiohttp tests.
-
-    This is needed because aiohttp creates background threads/timers that
-    are cleaned up asynchronously and may not finish before test teardown.
-    See: https://github.com/MatthewFlamm/pytest-homeassistant-custom-component/issues/153
-    """
-    return True
-
-
 @pytest_asyncio.fixture
 async def ubus_client():
     """Fixture that provides a UbusClient with automatic cleanup using context manager."""

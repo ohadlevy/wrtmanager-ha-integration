@@ -26,7 +26,9 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "aioresponses>=0.7.4",
-    "pytest-homeassistant-custom-component>=0.13.205",
+    # TODO: Re-enable for v1.0 - temporarily disabled due to aiohttp thread cleanup issues in CI
+    # See: https://github.com/MatthewFlamm/pytest-homeassistant-custom-component/issues/153
+    # "pytest-homeassistant-custom-component>=0.13.205",
 
     # Code Quality
     "black>=23.0.0",
