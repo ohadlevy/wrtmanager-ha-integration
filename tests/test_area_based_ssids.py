@@ -1,6 +1,6 @@
 """Tests for area-based SSID grouping functionality."""
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -502,14 +502,23 @@ class TestAreaBasedSSIDGrouping:
 
         config_entry = Mock()
 
-        global_sensor = WrtGlobalSSIDBinarySensor(
-            coordinator=coordinator,
-            ssid_name="MainNetwork",
-            ssid_group=ssid_group,
-            config_entry=config_entry,
-        )
+        # Create mock hass with device registry
+        mock_hass = Mock()
+        mock_device_registry = Mock()
+        mock_device_registry.async_get_device = Mock(return_value=None)  # No router device found
 
-        device_info = global_sensor.device_info
+        with patch("custom_components.wrtmanager.binary_sensor.dr") as mock_dr:
+            mock_dr.async_get.return_value = mock_device_registry
+
+            global_sensor = WrtGlobalSSIDBinarySensor(
+                coordinator=coordinator,
+                ssid_name="MainNetwork",
+                ssid_group=ssid_group,
+                config_entry=config_entry,
+            )
+            global_sensor.hass = mock_hass
+
+            device_info = global_sensor.device_info
         assert device_info["identifiers"] == {(DOMAIN, "global_ssid_MainNetwork")}
         assert device_info["name"] == "Global MainNetwork"
         assert device_info["manufacturer"] == "WrtManager"
@@ -524,15 +533,19 @@ class TestAreaBasedSSIDGrouping:
             }
         ]
 
-        area_sensor = WrtAreaSSIDBinarySensor(
-            coordinator=coordinator,
-            ssid_name="MainNetwork",
-            area_name="Living Room",
-            area_instances=area_instances,
-            config_entry=config_entry,
-        )
+        with patch("custom_components.wrtmanager.binary_sensor.dr") as mock_dr:
+            mock_dr.async_get.return_value = mock_device_registry
 
-        device_info = area_sensor.device_info
+            area_sensor = WrtAreaSSIDBinarySensor(
+                coordinator=coordinator,
+                ssid_name="MainNetwork",
+                area_name="Living Room",
+                area_instances=area_instances,
+                config_entry=config_entry,
+            )
+            area_sensor.hass = mock_hass
+
+            device_info = area_sensor.device_info
         assert device_info["identifiers"] == {(DOMAIN, "area_Living Room_MainNetwork")}
         assert device_info["name"] == "Living Room MainNetwork"
         assert device_info["manufacturer"] == "WrtManager"
