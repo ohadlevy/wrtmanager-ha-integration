@@ -1,0 +1,7 @@
+{
+  "name": "WrtManager",
+  "content_in_root": false,
+  "filename": "wrtmanager",
+  "country": ["ALL"],
+  "homeassistant": "2025.11.0"
+}

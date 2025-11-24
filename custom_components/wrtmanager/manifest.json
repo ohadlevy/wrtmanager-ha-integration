@@ -13,5 +13,5 @@
   "homekit": {},
   "version": "0.8.0",
   "iot_class": "local_polling",
-  "homeassistant": "2025.1.0"
+  "homeassistant": "2025.11.0"
 }

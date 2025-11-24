@@ -32,7 +32,7 @@ A comprehensive Home Assistant integration for managing OpenWrt networks with ad
 - `rpcd` package installed (usually pre-installed)
 
 ### Home Assistant Requirements
-- Home Assistant 2023.1+
+- Home Assistant 2025.11.0+
 - HACS (for easy installation)
 
 ## Installation
@@ -69,14 +69,23 @@ This script will:
 
 ### Step 2: Install Integration via HACS
 
+**Note**: WrtManager is currently available as a custom repository in HACS while we prepare for official submission.
+
+#### Option A: HACS Custom Repository (Current)
 1. Open HACS in Home Assistant
 2. Go to "Integrations"
-3. Click the three dots in the top right
-4. Select "Custom repositories"
+3. Click the **three dots (⋮)** in the top right corner
+4. Select **"Custom repositories"**
 5. Add repository URL: `https://github.com/ohadlevy/wrtmanager-ha-integration`
-6. Category: "Integration"
-7. Click "Add"
-8. Search for "WrtManager" and install
+6. Set Category: **"Integration"**
+7. Click **"Add"**
+8. **Restart Home Assistant** (required for custom repository detection)
+9. Return to HACS → Integrations
+10. Search for **"WrtManager"** and click **"Download"**
+11. **Restart Home Assistant** again after installation
+
+#### Option B: Official HACS Repository (Coming Soon)
+Once submitted to the official HACS repository, you'll be able to find WrtManager directly in the HACS integration list without adding a custom repository.
 
 ### Step 3: Configure Integration
 
