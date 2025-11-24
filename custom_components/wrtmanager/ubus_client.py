@@ -266,18 +266,12 @@ class UbusClient:
         """Make HTTP/HTTPS request to ubus endpoint."""
         if not self._session:
             # Create SSL context for HTTPS connections
-            ssl_context = None
+            connector = None
             if self.use_https and not self.verify_ssl:
                 # Disable SSL verification for self-signed certificates
-                import functools
+                ssl_context = self._create_ssl_context()
+                connector = aiohttp.TCPConnector(ssl=ssl_context)
 
-                # Create SSL context in executor to avoid blocking the event loop
-                loop = asyncio.get_event_loop()
-                ssl_context = await loop.run_in_executor(
-                    None, functools.partial(self._create_ssl_context)
-                )
-
-            connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
             self._session = aiohttp.ClientSession(connector=connector)
 
         try:

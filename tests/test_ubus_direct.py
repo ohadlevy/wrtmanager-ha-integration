@@ -43,6 +43,10 @@ async def ubus_client():
         yield client
     finally:
         await client.close()
+        # Force garbage collection to prevent lingering resources
+        import gc
+
+        gc.collect()
 
 
 @pytest_asyncio.fixture
