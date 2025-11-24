@@ -73,7 +73,7 @@ async def ubus_client_wrong_password():
 
 
 @pytest.mark.asyncio
-async def test_authentication_success(ubus_client):
+async def test_authentication_success(ubus_client, expected_lingering_threads):
     """Test successful authentication."""
     auth_response = {
         "jsonrpc": "2.0",
@@ -100,7 +100,7 @@ async def test_authentication_success(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_authentication_failure(ubus_client_wrong_password):
+async def test_authentication_failure(ubus_client_wrong_password, expected_lingering_threads):
     """Test authentication failure."""
     auth_response = {
         "jsonrpc": "2.0",
@@ -116,7 +116,7 @@ async def test_authentication_failure(ubus_client_wrong_password):
 
 
 @pytest.mark.asyncio
-async def test_call_ubus_success():
+async def test_call_ubus_success(expected_lingering_threads):
     """Test successful ubus call."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
@@ -137,7 +137,7 @@ async def test_call_ubus_success():
 
 
 @pytest.mark.asyncio
-async def test_close_session():
+async def test_close_session(expected_lingering_threads):
     """Test closing the session."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
@@ -158,7 +158,7 @@ async def test_close_session():
 
 
 @pytest.mark.asyncio
-async def test_https_client_url():
+async def test_https_client_url(expected_lingering_threads):
     """Test that HTTPS client uses correct URL."""
     client = UbusClient("192.168.1.1", "hass", "password", use_https=True)
 
@@ -172,7 +172,7 @@ async def test_https_client_url():
 
 
 @pytest.mark.asyncio
-async def test_http_client_url():
+async def test_http_client_url(expected_lingering_threads):
     """Test that HTTP client uses correct URL (default)."""
     client = UbusClient("192.168.1.1", "hass", "password")
 
@@ -186,7 +186,7 @@ async def test_http_client_url():
 
 
 @pytest.mark.asyncio
-async def test_https_authentication_success():
+async def test_https_authentication_success(expected_lingering_threads):
     """Test successful authentication with HTTPS."""
     client = UbusClient("192.168.1.1", "hass", "password", use_https=True, verify_ssl=False)
 
@@ -218,7 +218,7 @@ async def test_https_authentication_success():
 
 
 @pytest.mark.asyncio
-async def test_https_call_ubus_success():
+async def test_https_call_ubus_success(expected_lingering_threads):
     """Test successful ubus call with HTTPS."""
     client = UbusClient("192.168.1.1", "hass", "password", use_https=True)
 

@@ -48,7 +48,7 @@ async def ubus_client():
 
 
 @pytest.mark.asyncio
-async def test_get_wireless_devices_success(ubus_client):
+async def test_get_wireless_devices_success(ubus_client, expected_lingering_threads):
     """Test getting wireless devices successfully."""
     response = {
         "jsonrpc": "2.0",
@@ -64,7 +64,7 @@ async def test_get_wireless_devices_success(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_wireless_devices_error(ubus_client):
+async def test_get_wireless_devices_error(ubus_client, expected_lingering_threads):
     """Test getting wireless devices with error response."""
     response = {
         "jsonrpc": "2.0",
@@ -80,7 +80,7 @@ async def test_get_wireless_devices_error(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_device_associations_success(ubus_client):
+async def test_get_device_associations_success(ubus_client, expected_lingering_threads):
     """Test getting device associations successfully."""
 
     response = {
@@ -111,7 +111,7 @@ async def test_get_device_associations_success(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_device_associations_empty(ubus_client):
+async def test_get_device_associations_empty(ubus_client, expected_lingering_threads):
     """Test getting device associations with no clients."""
 
     response = {
@@ -128,7 +128,7 @@ async def test_get_device_associations_empty(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_dhcp_leases_success(ubus_client):
+async def test_get_dhcp_leases_success(ubus_client, expected_lingering_threads):
     """Test getting DHCP leases successfully via luci-rpc."""
 
     # Mock successful luci-rpc response
@@ -159,7 +159,7 @@ async def test_get_dhcp_leases_success(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_dhcp_leases_fallback_success(ubus_client):
+async def test_get_dhcp_leases_fallback_success(ubus_client, expected_lingering_threads):
     """Test getting DHCP leases successfully via fallback method."""
 
     # Mock luci-rpc access denied, then dhcp.ipv4leases success
@@ -202,7 +202,7 @@ async def test_get_dhcp_leases_fallback_success(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_dhcp_leases_not_available(ubus_client):
+async def test_get_dhcp_leases_not_available(ubus_client, expected_lingering_threads):
     """Test getting DHCP leases when not available (AP mode)."""
 
     response = {
@@ -219,7 +219,7 @@ async def test_get_dhcp_leases_not_available(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_system_info_success(ubus_client):
+async def test_get_system_info_success(ubus_client, expected_lingering_threads):
     """Test getting system information successfully."""
 
     response = {
@@ -248,7 +248,7 @@ async def test_get_system_info_success(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_get_system_info_error(ubus_client):
+async def test_get_system_info_error(ubus_client, expected_lingering_threads):
     """Test getting system information with error."""
 
     response = {
@@ -265,7 +265,7 @@ async def test_get_system_info_error(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_http_error_handling(ubus_client):
+async def test_http_error_handling(ubus_client, expected_lingering_threads):
     """Test handling of HTTP errors."""
 
     with aioresponses() as m:
@@ -276,7 +276,7 @@ async def test_http_error_handling(ubus_client):
 
 
 @pytest.mark.asyncio
-async def test_invalid_json_handling(ubus_client):
+async def test_invalid_json_handling(ubus_client, expected_lingering_threads):
     """Test handling of invalid JSON response."""
 
     with aioresponses() as m:
