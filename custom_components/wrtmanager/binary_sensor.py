@@ -13,7 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -745,6 +745,7 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
 
         return DeviceInfo(
             identifiers={(DOMAIN, self._mac)},
+            connections={(CONNECTION_NETWORK_MAC, self._mac)},
             name=device_name,
             manufacturer=device_data.get(ATTR_VENDOR) if device_data else "Unknown",
             model=device_data.get(ATTR_DEVICE_TYPE) if device_data else "Network Device",
