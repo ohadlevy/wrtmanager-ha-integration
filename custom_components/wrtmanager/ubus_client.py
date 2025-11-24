@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import random
+import secrets
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -37,7 +37,7 @@ class UbusClient:
         self,
         host: str,
         username: str = "hass",
-        password: str = "",
+        password: str = "",  # nosec B107
         timeout: int = 10,
         use_https: bool = False,
         verify_ssl: bool = False,
@@ -143,7 +143,7 @@ class UbusClient:
         """Make a ubus call and return the result."""
         request_data = {
             "jsonrpc": "2.0",
-            "id": random.randint(100, 999),
+            "id": secrets.randbelow(900) + 100,
             "method": "call",
             "params": [session_id, service, method, params],
         }
