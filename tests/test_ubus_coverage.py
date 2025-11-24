@@ -6,8 +6,9 @@ import json
 # Import UbusClient directly from the file
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 import pytest_asyncio
 from aioresponses import aioresponses
@@ -23,8 +24,24 @@ from ubus_client import (
 )
 
 
+@pytest.fixture
+def mock_threading_cleanup():
+    """Mock threading cleanup to prevent background threads in tests."""
+
+    async def mock_close(self):
+        """Mock close that doesn't create background threads."""
+        if hasattr(self, "_connector") and self._connector:
+            # Close connector without creating cleanup threads
+            if hasattr(self._connector, "_close"):
+                self._connector._close()
+        # Don't call the original close to avoid threading
+
+    with patch.object(aiohttp.ClientSession, "close", mock_close):
+        yield
+
+
 @pytest_asyncio.fixture
-async def ubus_client():
+async def ubus_client(mock_threading_cleanup):
     """Fixture that provides a UbusClient with automatic cleanup."""
     client = UbusClient("192.168.1.1", "hass", "password")
     try:
