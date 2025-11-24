@@ -455,7 +455,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     and (
                         datetime.now()
                         - self._device_history.get(mac, {}).get("last_change", datetime.min)
-                    ).seconds
+                    ).total_seconds()
                     >= ROAMING_DETECTION_THRESHOLD
                 ):
                     roaming_count += 1
