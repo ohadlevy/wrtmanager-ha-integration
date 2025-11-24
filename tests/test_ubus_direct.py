@@ -1,6 +1,7 @@
 """Direct tests for UbusClient without any HA dependencies."""
 
 import asyncio
+import gc
 import json
 
 # Import UbusClient directly from the file
@@ -44,8 +45,6 @@ async def ubus_client():
     finally:
         await client.close()
         # Force garbage collection to prevent lingering resources
-        import gc
-
         gc.collect()
 
 

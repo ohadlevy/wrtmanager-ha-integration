@@ -1,6 +1,7 @@
 """Comprehensive tests for UbusClient coverage."""
 
 import asyncio
+import gc
 import json
 
 # Import UbusClient directly from the file
@@ -52,8 +53,6 @@ async def ubus_client():
         if hasattr(client, "_session") and client._session:
             await client.close()
         # Force garbage collection to prevent lingering resources
-        import gc
-
         gc.collect()
 
 

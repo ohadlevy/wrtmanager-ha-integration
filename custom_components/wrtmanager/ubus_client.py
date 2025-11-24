@@ -337,6 +337,4 @@ class UbusClient:
             if connector and not connector.closed:
                 await connector.close()
 
-            # Give time for internal threads to cleanup
-            await asyncio.sleep(0.25)
             self._session = None
