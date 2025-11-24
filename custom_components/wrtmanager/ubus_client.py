@@ -335,5 +335,20 @@ class UbusClient:
     async def close(self) -> None:
         """Close the HTTP session."""
         if self._session:
+            # Store connector reference before closing session
+            connector = self._session.connector
             await self._session.close()
+
+            # Properly close connector if it exists
+            if connector and not connector.closed:
+                await connector.close()
+
             self._session = None
+
+    async def __aenter__(self) -> UbusClient:
+        """Enter the async context manager."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the async context manager."""
+        await self.close()
