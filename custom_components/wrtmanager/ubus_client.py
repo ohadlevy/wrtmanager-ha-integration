@@ -330,4 +330,6 @@ class UbusClient:
         """Close the HTTP session."""
         if self._session:
             await self._session.close()
+            # Give time for connection cleanup to prevent lingering threads
+            await asyncio.sleep(0.1)
             self._session = None
