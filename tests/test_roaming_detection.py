@@ -4,10 +4,8 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock
 
 from custom_components.wrtmanager.const import (
-    ATTR_MAC,
     ATTR_PRIMARY_AP,
     ATTR_ROAMING_COUNT,
-    ATTR_ROUTER,
     ROAMING_DETECTION_THRESHOLD,
 )
 from custom_components.wrtmanager.coordinator import WrtManagerCoordinator

@@ -1,7 +1,5 @@
 """Tests for SSID consolidation functionality."""
 
-from unittest.mock import Mock
-
 import pytest
 
 from custom_components.wrtmanager.coordinator import WrtManagerCoordinator

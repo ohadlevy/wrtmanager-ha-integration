@@ -117,7 +117,7 @@ jobs:
 
         # Run pylint separately (sequential for better error messages)
         echo "Running pylint..."
-        pylint custom_components/ --disable=all --enable=unused-import,undefined-variable && echo "✅ pylint passed" || { echo "❌ pylint failed" && EXIT_CODE=1; }
+        pylint custom_components/ tests/ --disable=all --enable=unused-import,undefined-variable && echo "✅ pylint passed" || { echo "❌ pylint failed" && EXIT_CODE=1; }
 
         exit ${EXIT_CODE:-0}
 

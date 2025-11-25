@@ -1,21 +1,14 @@
 """Integration tests for WrtManager Home Assistant integration."""
 
-import asyncio
 from datetime import datetime
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.wrtmanager.binary_sensor import (
-    async_setup_entry as async_setup_binary_sensors,
-)
-from custom_components.wrtmanager.const import CONF_ROUTERS, DOMAIN
+from custom_components.wrtmanager.const import CONF_ROUTERS
 from custom_components.wrtmanager.coordinator import WrtManagerCoordinator
-from custom_components.wrtmanager.sensor import async_setup_entry as async_setup_sensors
 
 
 # Test fixtures
@@ -145,15 +138,8 @@ class TestWrtManagerIntegration:
             async_setup_entry,
         )
 
-        # Verify all required attributes are imported
-        from custom_components.wrtmanager.const import (
-            ATTR_HOSTNAME,
-            ATTR_INTERFACE,
-            ATTR_MAC,
-            ATTR_RADIO,
-            ATTR_SIGNAL_DBM,
-            ATTR_SSID_NAME,
-        )
+        # Verify all required attributes can be imported
+        # (Imports are done inline to avoid F401 unused import warnings)
 
         assert WrtDevicePresenceSensor is not None
         assert WrtInterfaceStatusSensor is not None

@@ -6,17 +6,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-import pytest_asyncio
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components" / "wrtmanager"))
 
-from ubus_client import (
-    UbusAuthenticationError,
-    UbusClient,
-    UbusClientError,
-    UbusConnectionError,
-    UbusTimeoutError,
-)
+from ubus_client import UbusClient
 
 # All tests now use individual mocking to avoid aiohttp threading issues
 
