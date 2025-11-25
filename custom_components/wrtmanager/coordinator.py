@@ -104,7 +104,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
         # Collect data from all authenticated routers
         _LOGGER.debug(
-            "🔍 DEBUG: About to collect data from %d routers: %s",
+            "About to collect data from %d routers: %s",
             len(self.sessions),
             list(self.sessions.keys()),
         )
@@ -114,9 +114,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         ]
 
         router_data_results = await asyncio.gather(*data_tasks, return_exceptions=True)
-        _LOGGER.debug(
-            "🔍 DEBUG: Data collection completed for %d routers", len(router_data_results)
-        )
+        _LOGGER.debug("Data collection completed for %d routers", len(router_data_results))
 
         # Process collected data
         all_devices: List[Dict[str, Any]] = []
@@ -184,7 +182,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         self, host: str, session_id: str
     ) -> tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """Collect data from a single router."""
-        _LOGGER.debug("🔍 DEBUG: _collect_router_data() called for host %s", host)
+        _LOGGER.debug("Collecting data from router %s", host)
         client = self.routers[host]
         wifi_devices = []
         dhcp_data = {}
@@ -192,21 +190,19 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         interface_data = {}
 
         try:
-            _LOGGER.debug("🔍 DEBUG: Starting data collection for %s", host)
             # Get wireless interfaces and device associations
-            _LOGGER.debug("🔍 DEBUG: Getting wireless devices for %s", host)
             interfaces = await client.get_wireless_devices(session_id)
             if not interfaces:
                 _LOGGER.warning("No wireless interfaces found on %s", host)
 
             # Get device associations for each interface
             if interfaces:
-                _LOGGER.debug("🔍 DEBUG: Found %d interfaces on %s", len(interfaces), host)
+                _LOGGER.debug("Found %d wireless interfaces on %s", len(interfaces), host)
                 for interface in interfaces:
                     associations = await client.get_device_associations(session_id, interface)
                     if associations:
                         _LOGGER.debug(
-                            "🔍 DEBUG: Found %d associations on interface %s",
+                            "Found %d device associations on interface %s",
                             len(associations),
                             interface,
                         )
@@ -223,16 +219,13 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                             )
 
             # Get system information for monitoring
-            _LOGGER.debug("🔍 DEBUG: Getting system info for %s", host)
             system_info = await client.get_system_info(session_id)
             system_board = await client.get_system_board(session_id)
 
             if system_info:
                 system_data = {**system_info, **(system_board or {})}
-                _LOGGER.debug("🔍 DEBUG: Got system data for %s", host)
 
             # Get network interface status
-            _LOGGER.debug("🔍 DEBUG: Getting network interfaces for %s", host)
             network_interfaces = await client.get_network_interfaces(session_id)
             wireless_status = await client.get_wireless_status(session_id)
 
@@ -266,29 +259,21 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 interface_data.update(wireless_status)
 
             # Try to get DHCP data (usually only from main router)
-            _LOGGER.debug("🔍🔍🔍 CRITICAL DEBUG: About to start DHCP calls for %s", host)
-            _LOGGER.debug("Router %s - attempting to get DHCP leases...", host)
             dhcp_leases = await client.get_dhcp_leases(session_id)
-            _LOGGER.debug("Router %s - DHCP leases result: %s", host, dhcp_leases)
-
-            _LOGGER.debug("Router %s - attempting to get static DHCP hosts...", host)
             static_hosts = await client.get_static_dhcp_hosts(session_id)
-            _LOGGER.debug("Router %s - static hosts result: %s", host, static_hosts)
 
             if dhcp_leases or static_hosts:
-                _LOGGER.debug("Router %s - parsing DHCP data", host)
                 dhcp_data = self._parse_dhcp_data(dhcp_leases, static_hosts)
-                _LOGGER.debug("Router %s - parsed DHCP data: %s", host, dhcp_data)
+                _LOGGER.debug("Router %s - collected %d DHCP entries", host, len(dhcp_data))
             else:
                 _LOGGER.warning("Router %s - no DHCP data returned from ubus calls", host)
 
         except Exception as ex:
-            _LOGGER.error("🔍 DEBUG: Exception in _collect_router_data for %s: %s", host, ex)
             _LOGGER.error("Error collecting data from %s: %s", host, ex)
             raise UpdateFailed(f"Data collection failed for {host}: {ex}")
 
         _LOGGER.debug(
-            "🔍 DEBUG: Finished _collect_router_data for %s, %d wifi devices, %d dhcp entries",
+            "Finished collecting data from %s: %d WiFi devices, %d DHCP entries",
             host,
             len(wifi_devices),
             len(dhcp_data),
@@ -513,16 +498,8 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         """Extract SSID information from wireless status data."""
         ssid_data = {}
 
-        _LOGGER.debug("_extract_ssid_data called with interfaces: %s", interfaces.keys())
-
         for router_host, router_interfaces in interfaces.items():
             router_ssids = []
-
-            _LOGGER.debug(
-                "Processing router %s with interfaces: %s",
-                router_host,
-                list(router_interfaces.keys()),
-            )
 
             # Check if this router has any wireless status data available
             has_wireless_data = any(
@@ -538,12 +515,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
             # Look for wireless status data (has radio structure)
             for interface_name, interface_data in router_interfaces.items():
-                _LOGGER.debug(
-                    "Checking interface %s: type=%s, has_interfaces=%s",
-                    interface_name,
-                    type(interface_data),
-                    "interfaces" in interface_data if isinstance(interface_data, dict) else False,
-                )
 
                 # Skip network interfaces, focus on wireless status structure
                 if isinstance(interface_data, dict) and "interfaces" in interface_data:
@@ -551,55 +522,22 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     radio_name = interface_name
                     radio_interfaces = interface_data.get("interfaces", {})
 
-                    _LOGGER.debug(
-                        "Found radio %s with interfaces: %s (type: %s)",
-                        radio_name,
-                        (
-                            list(radio_interfaces.keys())
-                            if isinstance(radio_interfaces, dict)
-                            else radio_interfaces
-                        ),
-                        type(radio_interfaces),
-                    )
-
                     # Handle both dict and list formats for radio interfaces
                     if isinstance(radio_interfaces, list):
                         # OpenWrt returns interfaces as a list
-                        _LOGGER.debug(
-                            "Processing radio %s with %d interfaces (list format)",
-                            radio_name,
-                            len(radio_interfaces),
-                        )
                         interface_items = [
                             (f"interface_{i}", iface_data)
                             for i, iface_data in enumerate(radio_interfaces)
                         ]
                     elif isinstance(radio_interfaces, dict):
                         # Some versions might return as dict
-                        _LOGGER.debug(
-                            "Processing radio %s with %d interfaces (dict format)",
-                            radio_name,
-                            len(radio_interfaces),
-                        )
                         interface_items = radio_interfaces.items()
                     else:
-                        _LOGGER.debug(
-                            "Skipping radio %s - interfaces is neither dict nor list: %s",
-                            radio_name,
-                            type(radio_interfaces),
-                        )
                         continue
 
                     for ssid_interface_name, ssid_interface_data in interface_items:
                         config = ssid_interface_data.get("config", {})
                         ssid_name = config.get("ssid")
-
-                        _LOGGER.debug(
-                            "Processing SSID interface %s: ssid_name=%s, config_keys=%s",
-                            ssid_interface_name,
-                            ssid_name,
-                            list(config.keys()),
-                        )
 
                         # Extract SSID information
                         sanitized_config = self._sanitize_config(config)
@@ -622,21 +560,13 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                         # Only include valid SSIDs (must have a name)
                         if ssid_info["ssid_name"]:
                             router_ssids.append(ssid_info)
-                            _LOGGER.debug("Added SSID %s for router %s", ssid_name, router_host)
-                        else:
-                            _LOGGER.debug(
-                                "Skipping SSID interface %s - no SSID name", ssid_interface_name
-                            )
 
             if router_ssids:
                 ssid_data[router_host] = router_ssids
-                _LOGGER.debug("Router %s has %d SSIDs", router_host, len(router_ssids))
-            else:
-                _LOGGER.debug("Router %s has no SSIDs found", router_host)
+                _LOGGER.debug("Router %s: found %d SSIDs", router_host, len(router_ssids))
 
         # Consolidate SSIDs by name (group same SSID across multiple radios)
         consolidated_ssid_data = self._consolidate_ssids_by_name(ssid_data)
-        _LOGGER.debug("Final SSID data: %s", consolidated_ssid_data)
         return consolidated_ssid_data
 
     def _consolidate_ssids_by_name(
@@ -684,12 +614,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
                     consolidated_router_ssids.append(primary_ssid)
 
-                    _LOGGER.debug(
-                        "Consolidated SSID '%s' across %d radios: %s",
-                        ssid_name,
-                        len(radios),
-                        radios,
-                    )
+                    _LOGGER.debug("Consolidated SSID '%s' across %d radios", ssid_name, len(radios))
 
             consolidated[router_host] = consolidated_router_ssids
 
