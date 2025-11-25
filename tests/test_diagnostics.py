@@ -1,7 +1,7 @@
 """Test diagnostics for WrtManager."""
 
 from datetime import datetime
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 from homeassistant.config_entries import ConfigEntry

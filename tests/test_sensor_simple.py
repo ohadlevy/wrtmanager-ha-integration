@@ -1,6 +1,5 @@
 """Simple tests for WrtManager sensors."""
 
-from datetime import datetime
 from unittest.mock import AsyncMock, Mock
 
 import pytest

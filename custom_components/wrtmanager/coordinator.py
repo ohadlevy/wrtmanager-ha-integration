@@ -256,7 +256,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     "Router %s - SSID monitoring unavailable due to wireless status failure", host
                 )
             else:
-                _LOGGER.info("Router %s - Wireless status available for SSID monitoring", host)
+                _LOGGER.debug("Router %s - Wireless status available for SSID monitoring", host)
 
             if network_interfaces:
                 interface_data.update(network_interfaces)

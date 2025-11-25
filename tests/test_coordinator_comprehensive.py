@@ -1,7 +1,7 @@
 """Comprehensive tests for WrtManager coordinator."""
 
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
