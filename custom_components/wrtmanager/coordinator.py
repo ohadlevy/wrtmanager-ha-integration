@@ -103,20 +103,12 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Failed to authenticate with any router")
 
         # Collect data from all authenticated routers
-        _LOGGER.debug(
-            "🔍 DEBUG: About to collect data from %d routers: %s",
-            len(self.sessions),
-            list(self.sessions.keys()),
-        )
         data_tasks = [
             self._collect_router_data(host, session_id)
             for host, session_id in self.sessions.items()
         ]
 
         router_data_results = await asyncio.gather(*data_tasks, return_exceptions=True)
-        _LOGGER.debug(
-            "🔍 DEBUG: Data collection completed for %d routers", len(router_data_results)
-        )
 
         # Process collected data
         all_devices: List[Dict[str, Any]] = []
@@ -213,7 +205,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         self, host: str, session_id: str
     ) -> tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """Collect data from a single router."""
-        _LOGGER.debug("🔍 DEBUG: _collect_router_data() called for host %s", host)
         client = self.routers[host]
         wifi_devices = []
         dhcp_data = {}
@@ -221,24 +212,16 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         interface_data = {}
 
         try:
-            _LOGGER.debug("🔍 DEBUG: Starting data collection for %s", host)
             # Get wireless interfaces and device associations
-            _LOGGER.debug("🔍 DEBUG: Getting wireless devices for %s", host)
             interfaces = await client.get_wireless_devices(session_id)
             if not interfaces:
                 _LOGGER.warning("No wireless interfaces found on %s", host)
 
             # Get device associations for each interface
             if interfaces:
-                _LOGGER.debug("🔍 DEBUG: Found %d interfaces on %s", len(interfaces), host)
                 for interface in interfaces:
                     associations = await client.get_device_associations(session_id, interface)
                     if associations:
-                        _LOGGER.debug(
-                            "🔍 DEBUG: Found %d associations on interface %s",
-                            len(associations),
-                            interface,
-                        )
                         for device_data in associations:
                             wifi_devices.append(
                                 {
@@ -252,16 +235,13 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                             )
 
             # Get system information for monitoring
-            _LOGGER.debug("🔍 DEBUG: Getting system info for %s", host)
             system_info = await client.get_system_info(session_id)
             system_board = await client.get_system_board(session_id)
 
             if system_info:
                 system_data = {**system_info, **(system_board or {})}
-                _LOGGER.debug("🔍 DEBUG: Got system data for %s", host)
 
             # Get network interface status
-            _LOGGER.debug("🔍 DEBUG: Getting network interfaces for %s", host)
             network_interfaces = await client.get_network_interfaces(session_id)
             wireless_status = await client.get_wireless_status(session_id)
 
@@ -295,7 +275,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 interface_data.update(wireless_status)
 
             # Try to get DHCP data (usually only from main router)
-            _LOGGER.debug("🔍🔍🔍 CRITICAL DEBUG: About to start DHCP calls for %s", host)
             _LOGGER.debug("Router %s - attempting to get DHCP leases...", host)
             dhcp_leases = await client.get_dhcp_leases(session_id)
             _LOGGER.debug("Router %s - DHCP leases result: %s", host, dhcp_leases)
@@ -312,16 +291,9 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning("Router %s - no DHCP data returned from ubus calls", host)
 
         except Exception as ex:
-            _LOGGER.error("🔍 DEBUG: Exception in _collect_router_data for %s: %s", host, ex)
             _LOGGER.error("Error collecting data from %s: %s", host, ex)
             raise UpdateFailed(f"Data collection failed for {host}: {ex}")
 
-        _LOGGER.debug(
-            "🔍 DEBUG: Finished _collect_router_data for %s, %d wifi devices, %d dhcp entries",
-            host,
-            len(wifi_devices),
-            len(dhcp_data),
-        )
         return wifi_devices, dhcp_data, system_data, interface_data
 
     def _parse_dhcp_data(
