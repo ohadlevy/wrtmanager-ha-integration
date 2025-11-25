@@ -39,4 +39,4 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        args: [-m, pytest, tests/test_area_based_ssids.py, tests/test_core_logic.py, tests/test_device_registry_fixes.py, tests/test_init.py, tests/test_integration.py, tests/test_password_sanitization.py, tests/test_roaming_detection.py, tests/test_signal_sensors.py, tests/test_ssid_consolidation.py, tests/test_ssid_functionality.py, tests/test_traffic_sensors.py, tests/test_ubus_coverage.py, tests/test_ubus_direct.py, -v, --cov=custom_components/wrtmanager, --cov-report=term-missing, --cov-fail-under=39]
+        args: [-m, pytest, tests/, -v, --cov=custom_components/wrtmanager, --cov-report=term-missing, --cov-fail-under=39]

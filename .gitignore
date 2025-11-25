@@ -136,9 +136,6 @@ ieee-oui36.txt
 *.bak
 *.log
 
-# Problematic test files to exclude from CI
-tests/test_config_flow.py
-tests/test_device_manager.py
 
 # Local development
 .env.local
