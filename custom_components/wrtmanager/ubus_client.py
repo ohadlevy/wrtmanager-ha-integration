@@ -68,7 +68,6 @@ class UbusClient:
 
         try:
             response_data = await self._make_request(login_request)
-            _LOGGER.debug("Authentication response for %s: %s", self.host, response_data)
 
             result = response_data.get("result", [])
             if not isinstance(result, list) or len(result) == 0:
@@ -218,33 +217,21 @@ class UbusClient:
     async def get_dhcp_leases(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get DHCP lease information using best available method."""
         # First try luci-rpc method (more reliable when available)
-        _LOGGER.debug("Trying luci-rpc.getDHCPLeases on %s", self.host)
         result = await self.call_ubus(session_id, "luci-rpc", "getDHCPLeases", {"family": 4})
 
         if result and "dhcp_leases" in result:
-            _LOGGER.debug(
-                "Successfully got DHCP leases via luci-rpc from %s: %d leases",
-                self.host,
-                len(result["dhcp_leases"]),
-            )
             return result
 
         # Fallback to standard dhcp method
-        _LOGGER.debug("luci-rpc failed, trying dhcp.ipv4leases on %s", self.host)
         fallback_result = await self.call_ubus(session_id, "dhcp", "ipv4leases", {})
 
         if fallback_result and "device" in fallback_result:
-            _LOGGER.debug("Successfully got DHCP leases via dhcp.ipv4leases from %s", self.host)
             return fallback_result
-
-        _LOGGER.debug("No DHCP lease data available from %s", self.host)
         return None
 
     async def get_static_dhcp_hosts(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get static DHCP host configurations."""
-        _LOGGER.debug("Calling ubus uci.get for DHCP hosts on %s", self.host)
         result = await self.call_ubus(session_id, "uci", "get", {"config": "dhcp", "type": "host"})
-        _LOGGER.debug("Static DHCP hosts ubus call result on %s: %s", self.host, result)
         return result if result else None
 
     async def get_system_info(self, session_id: str) -> Optional[Dict[str, Any]]:

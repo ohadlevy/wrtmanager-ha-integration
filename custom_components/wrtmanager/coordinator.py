@@ -103,18 +103,12 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Failed to authenticate with any router")
 
         # Collect data from all authenticated routers
-        _LOGGER.debug(
-            "About to collect data from %d routers: %s",
-            len(self.sessions),
-            list(self.sessions.keys()),
-        )
         data_tasks = [
             self._collect_router_data(host, session_id)
             for host, session_id in self.sessions.items()
         ]
 
         router_data_results = await asyncio.gather(*data_tasks, return_exceptions=True)
-        _LOGGER.debug("Data collection completed for %d routers", len(router_data_results))
 
         # Process collected data
         all_devices: List[Dict[str, Any]] = []
@@ -156,7 +150,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
         # Extract SSID information from wireless status data
         ssid_data = self._extract_ssid_data(interfaces)
-        _LOGGER.debug("Extracted SSID data: %s", ssid_data)
 
         return {
             "devices": enriched_devices,
@@ -197,15 +190,9 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
             # Get device associations for each interface
             if interfaces:
-                _LOGGER.debug("Found %d wireless interfaces on %s", len(interfaces), host)
                 for interface in interfaces:
                     associations = await client.get_device_associations(session_id, interface)
                     if associations:
-                        _LOGGER.debug(
-                            "Found %d device associations on interface %s",
-                            len(associations),
-                            interface,
-                        )
                         for device_data in associations:
                             wifi_devices.append(
                                 {
@@ -229,17 +216,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             network_interfaces = await client.get_network_interfaces(session_id)
             wireless_status = await client.get_wireless_status(session_id)
 
-            _LOGGER.debug(
-                "Router %s - network_interfaces result: %s",
-                host,
-                list(network_interfaces.keys()) if network_interfaces else None,
-            )
-            _LOGGER.debug(
-                "Router %s - wireless_status result: %s",
-                host,
-                list(wireless_status.keys()) if wireless_status else None,
-            )
-
             # Log detailed information about wireless status availability for SSID features
             if wireless_status is None:
                 _LOGGER.warning(
@@ -250,9 +226,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 _LOGGER.info(
                     "Router %s - SSID monitoring unavailable due to wireless status failure", host
                 )
-            else:
-                _LOGGER.debug("Router %s - Wireless status available for SSID monitoring", host)
-
             if network_interfaces:
                 interface_data.update(network_interfaces)
             if wireless_status:
@@ -264,7 +237,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
             if dhcp_leases or static_hosts:
                 dhcp_data = self._parse_dhcp_data(dhcp_leases, static_hosts)
-                _LOGGER.debug("Router %s - collected %d DHCP entries", host, len(dhcp_data))
             else:
                 _LOGGER.warning("Router %s - no DHCP data returned from ubus calls", host)
 
@@ -272,12 +244,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Error collecting data from %s: %s", host, ex)
             raise UpdateFailed(f"Data collection failed for {host}: {ex}")
 
-        _LOGGER.debug(
-            "Finished collecting data from %s: %d WiFi devices, %d DHCP entries",
-            host,
-            len(wifi_devices),
-            len(dhcp_data),
-        )
         return wifi_devices, dhcp_data, system_data, interface_data
 
     def _parse_dhcp_data(
@@ -563,7 +529,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
             if router_ssids:
                 ssid_data[router_host] = router_ssids
-                _LOGGER.debug("Router %s: found %d SSIDs", router_host, len(router_ssids))
 
         # Consolidate SSIDs by name (group same SSID across multiple radios)
         consolidated_ssid_data = self._consolidate_ssids_by_name(ssid_data)
@@ -613,8 +578,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     )
 
                     consolidated_router_ssids.append(primary_ssid)
-
-                    _LOGGER.debug("Consolidated SSID '%s' across %d radios", ssid_name, len(radios))
 
             consolidated[router_host] = consolidated_router_ssids
 

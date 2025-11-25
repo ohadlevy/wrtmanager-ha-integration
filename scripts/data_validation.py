@@ -6,6 +6,7 @@ Tests all available ubus endpoints to understand what data we can collect.
 
 import asyncio
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -13,6 +14,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components" / "wrtmanager"))
 
 from ubus_client import UbusClient
+
+# Configure logging for this script
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+_LOGGER = logging.getLogger(__name__)
 
 
 class DataValidator:
@@ -25,13 +30,13 @@ class DataValidator:
 
     async def validate_all_data_sources(self):
         """Test all possible ubus data sources."""
-        print(f"🔍 Validating data sources on {self.client.host}")
+        _LOGGER.info("Validating data sources on %s", self.client.host)
 
         try:
             session_id = await self.client.authenticate()
-            print(f"✅ Authentication successful: {session_id}")
+            _LOGGER.info("Authentication successful: %s", session_id)
         except Exception as e:
-            print(f"❌ Authentication failed: {e}")
+            _LOGGER.error("Authentication failed: %s", e)
             return False
 
         # Test all data sources
@@ -47,7 +52,7 @@ class DataValidator:
 
     async def _test_wireless_data(self, session_id: str):
         """Test wireless/WiFi related data."""
-        print("\n📶 Testing Wireless Data Sources:")
+        _LOGGER.info("Testing Wireless Data Sources")
 
         # iwinfo APIs
         await self._test_api(session_id, "iwinfo", "devices", {}, "Wireless device list")
@@ -94,7 +99,7 @@ class DataValidator:
 
     async def _test_network_data(self, session_id: str):
         """Test network configuration and status."""
-        print("\n🌐 Testing Network Data Sources:")
+        _LOGGER.info("Testing Network Data Sources")
 
         await self._test_api(session_id, "network.interface", "dump", {}, "Network interfaces")
         await self._test_api(session_id, "network.device", "status", {}, "Network device status")
@@ -105,7 +110,7 @@ class DataValidator:
 
     async def _test_system_data(self, session_id: str):
         """Test system information."""
-        print("\n🖥️  Testing System Data Sources:")
+        _LOGGER.info("Testing System Data Sources")
 
         await self._test_api(session_id, "system", "board", {}, "System board information")
         await self._test_api(session_id, "system", "info", {}, "System information")
@@ -113,14 +118,14 @@ class DataValidator:
 
     async def _test_dhcp_data(self, session_id: str):
         """Test DHCP lease information."""
-        print("\n🏠 Testing DHCP Data Sources:")
+        _LOGGER.info("Testing DHCP Data Sources")
 
         await self._test_api(session_id, "dhcp", "ipv4leases", {}, "DHCP IPv4 leases")
         await self._test_api(session_id, "dhcp", "ipv6leases", {}, "DHCP IPv6 leases")
 
     async def _test_firewall_data(self, session_id: str):
         """Test firewall and traffic data."""
-        print("\n🔥 Testing Firewall Data Sources:")
+        _LOGGER.info("Testing Firewall Data Sources")
 
         await self._test_api(session_id, "luci-rpc", "getConntrackList", {}, "Connection tracking")
         await self._test_api(
@@ -136,7 +141,7 @@ class DataValidator:
 
     async def _test_advanced_apis(self, session_id: str):
         """Test advanced/experimental APIs."""
-        print("\n🚀 Testing Advanced APIs:")
+        _LOGGER.info("Testing Advanced APIs")
 
         # UCI (configuration)
         await self._test_api(session_id, "uci", "configs", {}, "Available UCI configurations")
@@ -162,7 +167,7 @@ class DataValidator:
         try:
             result = await self.client.call_ubus(session_id, service, method, params)
             if result is not None:
-                print(f"  ✅ {description}")
+                _LOGGER.info("SUCCESS: %s", description)
                 self.data_sources[f"{service}.{method}"] = {
                     "description": description,
                     "sample_data": self._truncate_data(result),
@@ -170,13 +175,13 @@ class DataValidator:
                     "status": "success",
                 }
             else:
-                print(f"  ⚠️  {description} (no data)")
+                _LOGGER.warning("NO DATA: %s", description)
                 self.data_sources[f"{service}.{method}"] = {
                     "description": description,
                     "status": "no_data",
                 }
         except Exception as e:
-            print(f"  ❌ {description}: {e}")
+            _LOGGER.error("FAILED: %s - %s", description, e)
             self.errors[f"{service}.{method}"] = {"description": description, "error": str(e)}
 
     def _truncate_data(self, data, max_length=200):
@@ -188,31 +193,31 @@ class DataValidator:
 
     def generate_report(self):
         """Generate a comprehensive data availability report."""
-        print("\n" + "=" * 80)
-        print("📊 DATA AVAILABILITY REPORT")
-        print("=" * 80)
+        _LOGGER.info("=" * 80)
+        _LOGGER.info("DATA AVAILABILITY REPORT")
+        _LOGGER.info("=" * 80)
 
-        print(f"\n✅ Successfully tested APIs: {len(self.data_sources)}")
-        print(f"❌ Failed APIs: {len(self.errors)}")
+        _LOGGER.info("Successfully tested APIs: %d", len(self.data_sources))
+        _LOGGER.info("Failed APIs: %d", len(self.errors))
 
-        print("\n🔍 Available Data Sources:")
+        _LOGGER.info("Available Data Sources:")
         for api, info in self.data_sources.items():
-            status_emoji = "✅" if info["status"] == "success" else "⚠️"
-            print(f"  {status_emoji} {api}: {info['description']}")
+            status = "SUCCESS" if info["status"] == "success" else "NO DATA"
+            _LOGGER.info("  [%s] %s: %s", status, api, info["description"])
             if info["status"] == "success" and "data_keys" in info:
                 if isinstance(info["data_keys"], list):
                     keys_display = ", ".join(info["data_keys"][:5])
                     if len(info["data_keys"]) > 5:
                         keys_display += "..."
-                    print(f"    Keys: {keys_display}")
+                    _LOGGER.info("    Keys: %s", keys_display)
 
         if self.errors:
-            print("\n❌ Failed APIs:")
+            _LOGGER.info("Failed APIs:")
             for api, error_info in self.errors.items():
-                print(f"  ❌ {api}: {error_info['error']}")
+                _LOGGER.error("  [FAILED] %s: %s", api, error_info["error"])
 
         # Generate feature mapping
-        print("\n🎯 FEATURE IMPLEMENTATION GUIDANCE:")
+        _LOGGER.info("FEATURE IMPLEMENTATION GUIDANCE:")
         self._suggest_feature_mapping()
 
     def _suggest_feature_mapping(self):
@@ -233,16 +238,16 @@ class DataValidator:
                 if any(api.replace("*", "") in source for source in self.data_sources.keys())
             ]
             if available_apis:
-                print(f"  ✅ {feature}: {', '.join(available_apis)}")
+                _LOGGER.info("  [AVAILABLE] %s: %s", feature, ", ".join(available_apis))
             else:
-                print(f"  ❌ {feature}: No compatible APIs found")
+                _LOGGER.warning("  [MISSING] %s: No compatible APIs found", feature)
 
 
 async def main():
     """Main validation function."""
     if len(sys.argv) != 4:
-        print("Usage: python data_validation.py <host> <username> <password>")
-        print("Example: python data_validation.py 192.168.1.1 hass password")
+        _LOGGER.error("Usage: python data_validation.py <host> <username> <password>")
+        _LOGGER.error("Example: python data_validation.py 192.168.1.1 hass password")
         sys.exit(1)
 
     host = sys.argv[1]
@@ -268,7 +273,7 @@ async def main():
 
         with open("openwrt_data_validation.json", "w") as f:
             json.dump(results, f, indent=2)
-        print("\n📄 Detailed results saved to: openwrt_data_validation.json")
+        _LOGGER.info("Detailed results saved to: openwrt_data_validation.json")
 
     return success
 
