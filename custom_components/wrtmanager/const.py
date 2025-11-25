@@ -13,6 +13,7 @@ CONF_ROUTER_DESCRIPTION = "description"
 CONF_ROUTER_USE_HTTPS = "use_https"
 CONF_ROUTER_VERIFY_SSL = "verify_ssl"
 CONF_VLAN_NAMES = "vlan_names"
+CONF_SCAN_INTERVAL = "scan_interval"
 
 # Default values
 DEFAULT_USERNAME = "hass"

@@ -25,7 +25,9 @@ from .const import (
     CONF_ROUTER_USERNAME,
     CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
+    CONF_SCAN_INTERVAL,
     CONF_VLAN_NAMES,
+    DEFAULT_SCAN_INTERVAL,
     DEFAULT_USE_HTTPS,
     DEFAULT_USERNAME,
     DEFAULT_VERIFY_SSL,
@@ -393,7 +395,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options."""
         if user_input is not None:
             action = user_input.get("action")
-            if action == "vlan_names":
+            if action == "scan_interval":
+                return await self.async_step_scan_interval()
+            elif action == "vlan_names":
                 return await self.async_step_vlan_names()
             elif action == "router_credentials":
                 return await self.async_step_select_router()
@@ -409,6 +413,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required("action"): vol.In(
                         {
+                            "scan_interval": "Configure Polling Interval",
                             "vlan_names": "Customize VLAN Names",
                             "router_credentials": "Update Router Credentials",
                             "add_router": "Add New Router",
@@ -418,6 +423,41 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 }
             ),
             description_placeholders={"description": "Choose what you want to configure:"},
+        )
+
+    async def async_step_scan_interval(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure scan interval."""
+        if user_input is not None:
+            # Preserve existing options and update scan interval
+            new_options = dict(self.config_entry.options)
+            new_options[CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
+
+            return self.async_create_entry(title="", data=new_options)
+
+        # Get current scan interval from options or use default
+        current_scan_interval = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
+
+        return self.async_show_form(
+            step_id="scan_interval",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SCAN_INTERVAL, default=current_scan_interval): vol.All(
+                        int, vol.Range(min=10, max=300)
+                    )
+                }
+            ),
+            description_placeholders={
+                "description": (
+                    "Set the polling interval for router data updates in seconds. "
+                    "Lower values provide more frequent updates but may impact router performance. "
+                    "Higher values reduce network traffic but may result in stale data. "
+                    "Range: 10-300 seconds."
+                )
+            },
         )
 
     async def async_step_vlan_names(self, user_input: dict[str, Any] | None = None) -> FlowResult:
