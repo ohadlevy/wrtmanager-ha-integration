@@ -1,10 +1,10 @@
 """Simple tests for WrtManagerCoordinator to improve coverage."""
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from custom_components.wrtmanager.coordinator import WrtManagerCoordinator
+import pytest
+
 from custom_components.wrtmanager.const import (
     ATTR_CONNECTED,
     ATTR_DATA_SOURCE,
@@ -26,6 +26,7 @@ from custom_components.wrtmanager.const import (
     DATA_SOURCE_WIFI_ONLY,
     ROAMING_DETECTION_THRESHOLD,
 )
+from custom_components.wrtmanager.coordinator import WrtManagerCoordinator
 
 
 class TestCoordinatorDataProcessing:
@@ -39,11 +40,7 @@ class TestCoordinatorDataProcessing:
 
         dhcp_leases = {
             "dhcp_leases": [
-                {
-                    "macaddr": "aa:bb:cc:dd:ee:ff",
-                    "ipaddr": "192.168.1.100",
-                    "hostname": "device1"
-                }
+                {"macaddr": "aa:bb:cc:dd:ee:ff", "ipaddr": "192.168.1.100", "hostname": "device1"}
             ]
         }
         static_hosts = None
@@ -66,7 +63,7 @@ class TestCoordinatorDataProcessing:
                     {
                         "macaddr": "aa:bb:cc:dd:ee:ff",
                         "ipaddr": "192.168.1.101",
-                        "hostname": "device2"
+                        "hostname": "device2",
                     }
                 ]
             }
@@ -91,7 +88,7 @@ class TestCoordinatorDataProcessing:
                     ".type": "host",
                     "mac": "aa:bb:cc:dd:ee:ff",
                     "ip": "192.168.1.50",
-                    "name": "static-device"
+                    "name": "static-device",
                 }
             }
         }
@@ -172,7 +169,7 @@ class TestCoordinatorDataProcessing:
             "password": "admin_pass",
             "channel": 6,
             "encryption": "psk2",
-            "other_field": None
+            "other_field": None,
         }
 
         result = WrtManagerCoordinator._sanitize_config(config)
@@ -190,7 +187,9 @@ class TestCoordinatorDataProcessing:
         """Test roaming detection with single device on one router."""
         coordinator = MagicMock()
         coordinator._device_history = {}
-        coordinator._update_roaming_detection = WrtManagerCoordinator._update_roaming_detection.__get__(coordinator)
+        coordinator._update_roaming_detection = (
+            WrtManagerCoordinator._update_roaming_detection.__get__(coordinator)
+        )
 
         devices = [
             {
@@ -210,7 +209,9 @@ class TestCoordinatorDataProcessing:
         """Test roaming detection with device on multiple routers."""
         coordinator = MagicMock()
         coordinator._device_history = {}
-        coordinator._update_roaming_detection = WrtManagerCoordinator._update_roaming_detection.__get__(coordinator)
+        coordinator._update_roaming_detection = (
+            WrtManagerCoordinator._update_roaming_detection.__get__(coordinator)
+        )
 
         devices = [
             {
@@ -222,7 +223,7 @@ class TestCoordinatorDataProcessing:
                 ATTR_MAC: "AA:BB:CC:DD:EE:FF",
                 ATTR_ROUTER: "192.168.1.2",
                 ATTR_SIGNAL_DBM: -60,
-            }
+            },
         ]
 
         coordinator._update_roaming_detection(devices)
@@ -240,10 +241,12 @@ class TestCoordinatorDataProcessing:
             "AA:BB:CC:DD:EE:FF": {
                 ATTR_PRIMARY_AP: "192.168.1.2",
                 ATTR_ROAMING_COUNT: 1,
-                "last_change": datetime.now() - timedelta(seconds=ROAMING_DETECTION_THRESHOLD + 10)
+                "last_change": datetime.now() - timedelta(seconds=ROAMING_DETECTION_THRESHOLD + 10),
             }
         }
-        coordinator._update_roaming_detection = WrtManagerCoordinator._update_roaming_detection.__get__(coordinator)
+        coordinator._update_roaming_detection = (
+            WrtManagerCoordinator._update_roaming_detection.__get__(coordinator)
+        )
 
         devices = [
             {
@@ -263,7 +266,9 @@ class TestCoordinatorDataProcessing:
     def test_get_frequency_bands(self):
         """Test frequency band detection."""
         coordinator = MagicMock()
-        coordinator._get_frequency_bands = WrtManagerCoordinator._get_frequency_bands.__get__(coordinator)
+        coordinator._get_frequency_bands = WrtManagerCoordinator._get_frequency_bands.__get__(
+            coordinator
+        )
 
         result = coordinator._get_frequency_bands(["radio0", "radio1", "radio2"])
 
@@ -272,8 +277,12 @@ class TestCoordinatorDataProcessing:
     def test_consolidate_ssids_by_name_single_radio(self):
         """Test SSID consolidation with single radio."""
         coordinator = MagicMock()
-        coordinator._get_frequency_bands = WrtManagerCoordinator._get_frequency_bands.__get__(coordinator)
-        coordinator._consolidate_ssids_by_name = WrtManagerCoordinator._consolidate_ssids_by_name.__get__(coordinator)
+        coordinator._get_frequency_bands = WrtManagerCoordinator._get_frequency_bands.__get__(
+            coordinator
+        )
+        coordinator._consolidate_ssids_by_name = (
+            WrtManagerCoordinator._consolidate_ssids_by_name.__get__(coordinator)
+        )
 
         ssid_data = {
             "192.168.1.1": [
@@ -283,7 +292,7 @@ class TestCoordinatorDataProcessing:
                     "ssid_name": "TestNetwork",
                     "mode": "ap",
                     "disabled": False,
-                    "router_host": "192.168.1.1"
+                    "router_host": "192.168.1.1",
                 }
             ]
         }
@@ -297,8 +306,12 @@ class TestCoordinatorDataProcessing:
     def test_consolidate_ssids_by_name_multi_radio(self):
         """Test SSID consolidation with multiple radios."""
         coordinator = MagicMock()
-        coordinator._get_frequency_bands = WrtManagerCoordinator._get_frequency_bands.__get__(coordinator)
-        coordinator._consolidate_ssids_by_name = WrtManagerCoordinator._consolidate_ssids_by_name.__get__(coordinator)
+        coordinator._get_frequency_bands = WrtManagerCoordinator._get_frequency_bands.__get__(
+            coordinator
+        )
+        coordinator._consolidate_ssids_by_name = (
+            WrtManagerCoordinator._consolidate_ssids_by_name.__get__(coordinator)
+        )
 
         ssid_data = {
             "192.168.1.1": [
@@ -308,7 +321,7 @@ class TestCoordinatorDataProcessing:
                     "ssid_name": "TestNetwork",
                     "mode": "ap",
                     "disabled": False,
-                    "router_host": "192.168.1.1"
+                    "router_host": "192.168.1.1",
                 },
                 {
                     "radio": "radio1",
@@ -316,8 +329,8 @@ class TestCoordinatorDataProcessing:
                     "ssid_name": "TestNetwork",
                     "mode": "ap",
                     "disabled": False,
-                    "router_host": "192.168.1.1"
-                }
+                    "router_host": "192.168.1.1",
+                },
             ]
         }
 
@@ -342,7 +355,7 @@ class TestCoordinatorUtilityMethods:
         coordinator.data = {
             "devices": [
                 {ATTR_MAC: "AA:BB:CC:DD:EE:FF", ATTR_HOSTNAME: "device1"},
-                {ATTR_MAC: "11:22:33:44:55:66", ATTR_HOSTNAME: "device2"}
+                {ATTR_MAC: "11:22:33:44:55:66", ATTR_HOSTNAME: "device2"},
             ]
         }
         coordinator.get_device_by_mac = WrtManagerCoordinator.get_device_by_mac.__get__(coordinator)
@@ -379,10 +392,12 @@ class TestCoordinatorUtilityMethods:
             "devices": [
                 {ATTR_ROUTER: "192.168.1.1", ATTR_HOSTNAME: "device1"},
                 {ATTR_ROUTER: "192.168.1.2", ATTR_HOSTNAME: "device2"},
-                {ATTR_ROUTER: "192.168.1.1", ATTR_HOSTNAME: "device3"}
+                {ATTR_ROUTER: "192.168.1.1", ATTR_HOSTNAME: "device3"},
             ]
         }
-        coordinator.get_devices_by_router = WrtManagerCoordinator.get_devices_by_router.__get__(coordinator)
+        coordinator.get_devices_by_router = WrtManagerCoordinator.get_devices_by_router.__get__(
+            coordinator
+        )
 
         devices = coordinator.get_devices_by_router("192.168.1.1")
 
@@ -394,7 +409,9 @@ class TestCoordinatorUtilityMethods:
         """Test getting devices by router with no data."""
         coordinator = MagicMock()
         coordinator.data = None
-        coordinator.get_devices_by_router = WrtManagerCoordinator.get_devices_by_router.__get__(coordinator)
+        coordinator.get_devices_by_router = WrtManagerCoordinator.get_devices_by_router.__get__(
+            coordinator
+        )
 
         devices = coordinator.get_devices_by_router("192.168.1.1")
 
