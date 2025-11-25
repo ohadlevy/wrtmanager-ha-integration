@@ -1,10 +1,8 @@
 """Tests for device registry and entity ID fixes."""
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 
 from custom_components.wrtmanager.binary_sensor import WrtDevicePresenceSensor

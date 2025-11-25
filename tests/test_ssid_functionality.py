@@ -1,7 +1,5 @@
 """Tests for SSID discovery and monitoring functionality."""
 
-import pytest
-
 
 def test_ssid_extraction_from_wireless_data():
     """Test SSID extraction from wireless status data."""

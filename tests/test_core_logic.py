@@ -1,7 +1,5 @@
 """Tests for core business logic without HA dependencies."""
 
-import pytest
-
 
 def test_vlan_detection_logic():
     """Test VLAN detection based on IP address."""
