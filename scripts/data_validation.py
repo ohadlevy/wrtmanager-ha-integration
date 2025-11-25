@@ -25,13 +25,13 @@ class DataValidator:
 
     async def validate_all_data_sources(self):
         """Test all possible ubus data sources."""
-        print(f"🔍 Validating data sources on {self.client.host}")
+        print(f"Validating data sources on {self.client.host}")
 
         try:
             session_id = await self.client.authenticate()
-            print(f"✅ Authentication successful: {session_id}")
+            print(f"Authentication successful: {session_id}")
         except Exception as e:
-            print(f"❌ Authentication failed: {e}")
+            print(f"Authentication failed: {e}")
             return False
 
         # Test all data sources
@@ -47,7 +47,7 @@ class DataValidator:
 
     async def _test_wireless_data(self, session_id: str):
         """Test wireless/WiFi related data."""
-        print("\n📶 Testing Wireless Data Sources:")
+        print("\nTesting Wireless Data Sources:")
 
         # iwinfo APIs
         await self._test_api(session_id, "iwinfo", "devices", {}, "Wireless device list")
@@ -94,7 +94,7 @@ class DataValidator:
 
     async def _test_network_data(self, session_id: str):
         """Test network configuration and status."""
-        print("\n🌐 Testing Network Data Sources:")
+        print("\nTesting Network Data Sources:")
 
         await self._test_api(session_id, "network.interface", "dump", {}, "Network interfaces")
         await self._test_api(session_id, "network.device", "status", {}, "Network device status")
@@ -105,7 +105,7 @@ class DataValidator:
 
     async def _test_system_data(self, session_id: str):
         """Test system information."""
-        print("\n🖥️  Testing System Data Sources:")
+        print("\nTesting System Data Sources:")
 
         await self._test_api(session_id, "system", "board", {}, "System board information")
         await self._test_api(session_id, "system", "info", {}, "System information")
@@ -113,14 +113,14 @@ class DataValidator:
 
     async def _test_dhcp_data(self, session_id: str):
         """Test DHCP lease information."""
-        print("\n🏠 Testing DHCP Data Sources:")
+        print("\nTesting DHCP Data Sources:")
 
         await self._test_api(session_id, "dhcp", "ipv4leases", {}, "DHCP IPv4 leases")
         await self._test_api(session_id, "dhcp", "ipv6leases", {}, "DHCP IPv6 leases")
 
     async def _test_firewall_data(self, session_id: str):
         """Test firewall and traffic data."""
-        print("\n🔥 Testing Firewall Data Sources:")
+        print("\nTesting Firewall Data Sources:")
 
         await self._test_api(session_id, "luci-rpc", "getConntrackList", {}, "Connection tracking")
         await self._test_api(
@@ -136,7 +136,7 @@ class DataValidator:
 
     async def _test_advanced_apis(self, session_id: str):
         """Test advanced/experimental APIs."""
-        print("\n🚀 Testing Advanced APIs:")
+        print("\nTesting Advanced APIs:")
 
         # UCI (configuration)
         await self._test_api(session_id, "uci", "configs", {}, "Available UCI configurations")
@@ -162,7 +162,7 @@ class DataValidator:
         try:
             result = await self.client.call_ubus(session_id, service, method, params)
             if result is not None:
-                print(f"  ✅ {description}")
+                print(f"  SUCCESS: {description}")
                 self.data_sources[f"{service}.{method}"] = {
                     "description": description,
                     "sample_data": self._truncate_data(result),
@@ -170,13 +170,13 @@ class DataValidator:
                     "status": "success",
                 }
             else:
-                print(f"  ⚠️  {description} (no data)")
+                print(f"  WARNING: {description} (no data)")
                 self.data_sources[f"{service}.{method}"] = {
                     "description": description,
                     "status": "no_data",
                 }
         except Exception as e:
-            print(f"  ❌ {description}: {e}")
+            print(f"  ERROR: {description}: {e}")
             self.errors[f"{service}.{method}"] = {"description": description, "error": str(e)}
 
     def _truncate_data(self, data, max_length=200):
@@ -189,16 +189,16 @@ class DataValidator:
     def generate_report(self):
         """Generate a comprehensive data availability report."""
         print("\n" + "=" * 80)
-        print("📊 DATA AVAILABILITY REPORT")
+        print("DATA AVAILABILITY REPORT")
         print("=" * 80)
 
-        print(f"\n✅ Successfully tested APIs: {len(self.data_sources)}")
-        print(f"❌ Failed APIs: {len(self.errors)}")
+        print(f"\nSuccessfully tested APIs: {len(self.data_sources)}")
+        print(f"Failed APIs: {len(self.errors)}")
 
-        print("\n🔍 Available Data Sources:")
+        print("\nAvailable Data Sources:")
         for api, info in self.data_sources.items():
-            status_emoji = "✅" if info["status"] == "success" else "⚠️"
-            print(f"  {status_emoji} {api}: {info['description']}")
+            status_text = "SUCCESS" if info["status"] == "success" else "WARNING"
+            print(f"  {status_text}: {api}: {info['description']}")
             if info["status"] == "success" and "data_keys" in info:
                 if isinstance(info["data_keys"], list):
                     keys_display = ", ".join(info["data_keys"][:5])
@@ -207,12 +207,12 @@ class DataValidator:
                     print(f"    Keys: {keys_display}")
 
         if self.errors:
-            print("\n❌ Failed APIs:")
+            print("\nFailed APIs:")
             for api, error_info in self.errors.items():
-                print(f"  ❌ {api}: {error_info['error']}")
+                print(f"  ERROR: {api}: {error_info['error']}")
 
         # Generate feature mapping
-        print("\n🎯 FEATURE IMPLEMENTATION GUIDANCE:")
+        print("\nFEATURE IMPLEMENTATION GUIDANCE:")
         self._suggest_feature_mapping()
 
     def _suggest_feature_mapping(self):
@@ -233,9 +233,9 @@ class DataValidator:
                 if any(api.replace("*", "") in source for source in self.data_sources.keys())
             ]
             if available_apis:
-                print(f"  ✅ {feature}: {', '.join(available_apis)}")
+                print(f"  SUCCESS: {feature}: {', '.join(available_apis)}")
             else:
-                print(f"  ❌ {feature}: No compatible APIs found")
+                print(f"  ERROR: {feature}: No compatible APIs found")
 
 
 async def main():
@@ -268,7 +268,7 @@ async def main():
 
         with open("openwrt_data_validation.json", "w") as f:
             json.dump(results, f, indent=2)
-        print("\n📄 Detailed results saved to: openwrt_data_validation.json")
+        print("\nDetailed results saved to: openwrt_data_validation.json")
 
     return success
 
