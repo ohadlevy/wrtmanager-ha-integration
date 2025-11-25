@@ -171,14 +171,43 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         }
 
     async def _authenticate_router(self, host: str, client: UbusClient) -> str:
-        """Authenticate with a single router."""
-        try:
-            session_id = await client.authenticate()
-            if not session_id:
-                raise UpdateFailed(f"Authentication failed for {host}")
-            return session_id
-        except UbusClientError as ex:
-            raise UpdateFailed(f"Authentication error for {host}: {ex}")
+        """Authenticate with a single router with retry logic."""
+        max_retries = 3
+        base_delay = 1.0  # Base delay in seconds
+
+        for attempt in range(max_retries):
+            try:
+                session_id = await client.authenticate()
+                if not session_id:
+                    raise UpdateFailed(f"Authentication failed for {host}")
+
+                if attempt > 0:
+                    _LOGGER.info("Authentication succeeded for %s on attempt %d", host, attempt + 1)
+
+                return session_id
+
+            except UpdateFailed:
+                # Re-raise UpdateFailed exceptions immediately (no retry for invalid session)
+                raise
+            except UbusClientError as ex:
+                if attempt == max_retries - 1:
+                    # Last attempt failed, raise the error
+                    raise UpdateFailed(
+                        f"Authentication error for {host} after {max_retries} attempts: {ex}"
+                    )
+
+                # Calculate exponential backoff delay
+                delay = base_delay * (2**attempt)
+                _LOGGER.warning(
+                    "Authentication failed for %s (attempt %d/%d): %s. Retrying in %.1f seconds",
+                    host,
+                    attempt + 1,
+                    max_retries,
+                    ex,
+                    delay,
+                )
+
+                await asyncio.sleep(delay)
 
     async def _collect_router_data(
         self, host: str, session_id: str

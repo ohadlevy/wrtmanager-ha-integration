@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components" / "wrtmanager"))
 
 # Import directly from the ubus_client module
-from ubus_client import UbusAuthenticationError, UbusClient
+from ubus_client import UbusAuthenticationError, UbusClient, UbusConnectionError, UbusTimeoutError
 
 # All tests now use individual mocking to avoid aiohttp threading issues
 
@@ -157,3 +157,31 @@ async def test_https_call_ubus_success():
         async with UbusClient("192.168.1.1", "hass", "password", use_https=True) as client:
             result = await client.call_ubus("session", "service", "method", {})
             assert result == {"secure": "data"}
+
+
+@pytest.mark.asyncio
+async def test_authentication_timeout_error():
+    """Test authentication failure due to timeout."""
+
+    async def mock_make_request(self, request_data):
+        raise UbusTimeoutError("Request timeout")
+
+    with patch.object(UbusClient, "_make_request", mock_make_request):
+        async with UbusClient("192.168.1.1", "hass", "password") as client:
+            with pytest.raises(UbusAuthenticationError) as exc_info:
+                await client.authenticate()
+            assert "Request timeout" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_authentication_connection_error():
+    """Test authentication failure due to connection error."""
+
+    async def mock_make_request(self, request_data):
+        raise UbusConnectionError("Connection refused")
+
+    with patch.object(UbusClient, "_make_request", mock_make_request):
+        async with UbusClient("192.168.1.1", "hass", "password") as client:
+            with pytest.raises(UbusAuthenticationError) as exc_info:
+                await client.authenticate()
+            assert "Connection refused" in str(exc_info.value)
