@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Pattern
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
@@ -77,6 +78,9 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
         # Device tracking for roaming detection
         self._device_history: Dict[str, Dict] = {}  # MAC -> device history
+
+        # Compile regex patterns once for performance optimization
+        self._vlan_pattern: Pattern[str] = re.compile(r"vlan(\d+)")
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from all routers."""
@@ -385,9 +389,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             # Check for explicit VLAN tags in interface names
             if "vlan" in interface_lower:
                 # Extract VLAN ID from names like "wlan0-vlan3", "phy0-ap1-vlan13"
-                import re
-
-                vlan_match = re.search(r"vlan(\d+)", interface_lower)
+                vlan_match = self._vlan_pattern.search(interface_lower)
                 if vlan_match:
                     return int(vlan_match.group(1))
 
@@ -421,6 +423,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     if 1 <= vlan_candidate <= 4094:
                         return vlan_candidate
                 except ValueError:
+                    # If the third octet is not an integer, fall back to default VLAN
                     pass
 
         return 1  # Default to main VLAN
