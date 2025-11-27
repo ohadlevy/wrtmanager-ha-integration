@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -41,7 +41,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Fetch initial data so we have data when entities subscribe
-    await coordinator.async_config_entry_first_refresh()
+    # Only use async_config_entry_first_refresh when entry is in SETUP_IN_PROGRESS state
+    # to avoid deprecation warning in Home Assistant 2025.11+
+    if entry.state == ConfigEntryState.SETUP_IN_PROGRESS:
+        await coordinator.async_config_entry_first_refresh()
+    else:
+        # For entries not in SETUP_IN_PROGRESS, use regular refresh
+        await coordinator.async_refresh()
 
     if not coordinator.last_update_success:
         raise ConfigEntryNotReady("Failed to initialize WrtManager")
