@@ -643,11 +643,14 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
         super().__init__(coordinator)
         self._mac = mac.upper()
         self._config_entry = config_entry
-        self._router_host = config_entry.data.get("host")
 
         # Get device info for initial setup
         device_data = self._get_device_data()
         device_name = self._get_device_name(device_data)
+
+        # Get router host from device data, not config entry
+        # This ensures we use the actual router where this device was detected
+        self._router_host = device_data.get(ATTR_ROUTER) if device_data else None
 
         # Include router host in unique ID to avoid conflicts when same
         # device connects to different routers
