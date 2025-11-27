@@ -13,7 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceEntry, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -719,7 +719,6 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping in Home Assistant."""
         device_data = self._get_device_data()
-        device_name = self._get_device_name(device_data)
 
         # Get router information for better device context
         router_host = device_data.get(ATTR_ROUTER) if device_data else self._router_host
@@ -737,17 +736,44 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
                     router_host,
                 )
 
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._mac)},
-            connections={(CONNECTION_NETWORK_MAC, self._mac)},
-            name=device_name,
-            manufacturer=device_data.get(ATTR_VENDOR) if device_data else "Unknown",
-            model=device_data.get(ATTR_DEVICE_TYPE) if device_data else "Network Device",
-            sw_version=self._get_device_firmware(device_data),
-            via_device=via_device_id,
+        # Check if device already exists to preserve user customizations
+        existing_device = self._get_existing_device()
+
+        # Create DeviceInfo with proper preservation logic
+        device_info_dict = {
+            "identifiers": {(DOMAIN, self._mac)},
+            "connections": {(CONNECTION_NETWORK_MAC, self._mac)},
+            "sw_version": self._get_device_firmware(device_data),
+            "via_device": via_device_id,
             # Note: No configuration_url for connected devices - they don't have web interfaces
             # Only routers/infrastructure devices should have configuration_url
-        )
+        }
+
+        # Only set name, manufacturer, model and suggested_area for new devices
+        # to preserve existing customizations
+        if not existing_device:
+            device_name = self._get_device_name(device_data)
+            device_info_dict["name"] = device_name
+            device_info_dict["manufacturer"] = (
+                device_data.get(ATTR_VENDOR) if device_data else "Unknown"
+            )
+            device_info_dict["model"] = (
+                device_data.get(ATTR_DEVICE_TYPE) if device_data else "Network Device"
+            )
+            # Set suggested_area based on router's area if available
+            suggested_area = self._get_suggested_area(router_host)
+            if suggested_area:
+                device_info_dict["suggested_area"] = suggested_area
+        else:
+            # Log debug info when preserving existing device
+            _LOGGER.debug(
+                "Device %s already exists with name '%s', preserving existing name to prevent "
+                "overwrites during device merge",
+                self._mac,
+                existing_device.name_by_user or existing_device.name,
+            )
+
+        return DeviceInfo(**device_info_dict)
 
     def _get_device_data(self) -> Dict[str, Any] | None:
         """Get current device data from coordinator."""
@@ -758,6 +784,37 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
             if device.get(ATTR_MAC) == self._mac:
                 return device
         return None
+
+    def _get_suggested_area(self, router_host: str) -> str | None:
+        """Get suggested area for new device based on router's area assignment."""
+        if not router_host:
+            return None
+
+        # Get router device to check its area assignment
+        device_registry = dr.async_get(self.hass)
+        router_device = device_registry.async_get_device(identifiers={(DOMAIN, router_host)})
+
+        if router_device and router_device.area_id:
+            area_registry = ar.async_get(self.hass)
+            area = area_registry.async_get_area(router_device.area_id)
+            if area:
+                return area.name
+
+        return None
+
+    def _get_existing_device(self) -> DeviceEntry | None:
+        """Get existing device from device registry."""
+        device_registry = dr.async_get(self.hass)
+        # Look for device by MAC connection (most reliable for device merging)
+        existing_device = device_registry.async_get_device(
+            connections={(CONNECTION_NETWORK_MAC, self._mac)}
+        )
+        if existing_device:
+            return existing_device
+
+        # Also check by our integration's identifier
+        existing_device = device_registry.async_get_device(identifiers={(DOMAIN, self._mac)})
+        return existing_device
 
     def _get_device_name(self, device_data: Dict[str, Any] | None) -> str:
         """Get friendly device name."""
