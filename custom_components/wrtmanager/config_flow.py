@@ -26,11 +26,13 @@ from .const import (
     CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
     CONF_SCAN_INTERVAL,
+    CONF_VLAN_DETECTION_RULES,
     CONF_VLAN_NAMES,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_USE_HTTPS,
     DEFAULT_USERNAME,
     DEFAULT_VERIFY_SSL,
+    DEFAULT_VLAN_DETECTION_RULES,
     DOMAIN,
     ERROR_ALREADY_CONFIGURED,
     ERROR_CANNOT_CONNECT,
@@ -399,6 +401,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 return await self.async_step_scan_interval()
             elif action == "vlan_names":
                 return await self.async_step_vlan_names()
+            elif action == "vlan_detection":
+                return await self.async_step_vlan_detection()
             elif action == "router_credentials":
                 return await self.async_step_select_router()
             elif action == "add_router":
@@ -415,6 +419,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         {
                             "scan_interval": "Configure Polling Interval",
                             "vlan_names": "Customize VLAN Names",
+                            "vlan_detection": "Configure VLAN Detection Rules",
                             "router_credentials": "Update Router Credentials",
                             "add_router": "Add New Router",
                             "remove_router": "Remove Router",
@@ -498,6 +503,132 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders={
                 "description": "Customize VLAN names that will be displayed in Home Assistant. "
                 "These names will be used in device attributes and sensor breakdowns."
+            },
+        )
+
+    async def async_step_vlan_detection(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure VLAN detection rules."""
+        if user_input is not None:
+            # Transform input into proper VLAN detection rules dictionary
+            static_mappings = {}
+            interface_patterns = {}
+
+            # Parse static mappings (exact interface names)
+            for i in range(1, 6):  # Support up to 5 static mappings (UI limit)
+                interface_key = f"static_interface_{i}"
+                vlan_key = f"static_vlan_{i}"
+                if interface_key in user_input and vlan_key in user_input:
+                    interface = user_input[interface_key].strip()
+                    vlan_str = user_input[vlan_key].strip()
+                    if interface and vlan_str:
+                        # Validate interface name using whitelist approach for security
+                        # Only allow alphanumeric characters, hyphens, underscores, and dots
+                        # Reject control characters including newlines that could cause issues
+                        import re
+
+                        if not re.match(r"^[a-zA-Z0-9._-]+$", interface) or any(
+                            ord(c) < 32 for c in interface
+                        ):
+                            _LOGGER.warning(
+                                "Interface name '%s' contains invalid characters, skipping. "
+                                "Only alphanumeric, dots, hyphens and underscores are allowed.",
+                                interface,
+                            )
+                            continue
+                        try:
+                            vlan_id = int(vlan_str)
+                            if 1 <= vlan_id <= 4094:
+                                static_mappings[interface] = vlan_id
+                        except ValueError:
+                            _LOGGER.warning(
+                                "Invalid VLAN ID '%s' for interface '%s', skipping.",
+                                vlan_str,
+                                interface,
+                            )
+
+            # Parse interface patterns
+            for i in range(1, 4):  # Support up to 3 pattern mappings (UI limit)
+                pattern_key = f"pattern_{i}"
+                vlan_key = f"pattern_vlan_{i}"
+                if pattern_key in user_input and vlan_key in user_input:
+                    pattern = user_input[pattern_key].strip()
+                    vlan_str = user_input[vlan_key].strip()
+                    if pattern and vlan_str:
+                        # Validate regex pattern before saving
+                        from .coordinator import _validate_regex_pattern
+
+                        if not _validate_regex_pattern(pattern):
+                            _LOGGER.warning(
+                                "Invalid or unsafe regex pattern '%s', skipping.", pattern
+                            )
+                            continue
+                        try:
+                            vlan_id = int(vlan_str)
+                            if 1 <= vlan_id <= 4094:
+                                interface_patterns[pattern] = vlan_id
+                        except ValueError:
+                            # Ignore invalid VLAN IDs (non-integer values); skip this mapping
+                            _LOGGER.warning(
+                                "Invalid VLAN ID '%s' for pattern '%s', skipping.",
+                                vlan_str,
+                                pattern,
+                            )
+
+            vlan_detection_rules = {
+                "static_mappings": static_mappings,
+                "interface_patterns": interface_patterns,
+            }
+
+            # Preserve existing options and update VLAN detection rules
+            new_options = dict(self.config_entry.options)
+            new_options[CONF_VLAN_DETECTION_RULES] = vlan_detection_rules
+
+            return self.async_create_entry(title="", data=new_options)
+
+        # Get current VLAN detection rules from options or use defaults
+        current_rules = self.config_entry.options.get(
+            CONF_VLAN_DETECTION_RULES, DEFAULT_VLAN_DETECTION_RULES
+        )
+        current_static = current_rules.get("static_mappings", {})
+        current_patterns = current_rules.get("interface_patterns", {})
+
+        # Create form schema for VLAN detection rules
+        schema_dict = {}
+
+        # Static mappings (exact interface names) - sorted by VLAN ID for consistency
+        static_items = sorted(current_static.items(), key=lambda x: x[1])
+        for i in range(1, 6):
+            if i <= len(static_items):
+                interface, vlan_id = static_items[i - 1]
+                schema_dict[vol.Optional(f"static_interface_{i}", default=interface)] = str
+                schema_dict[vol.Optional(f"static_vlan_{i}", default=str(vlan_id))] = str
+            else:
+                schema_dict[vol.Optional(f"static_interface_{i}", default="")] = str
+                schema_dict[vol.Optional(f"static_vlan_{i}", default="")] = str
+
+        # Pattern mappings - sorted by VLAN ID for consistency
+        pattern_items = sorted(current_patterns.items(), key=lambda x: x[1])
+        for i in range(1, 4):
+            if i <= len(pattern_items):
+                pattern, vlan_id = pattern_items[i - 1]
+                schema_dict[vol.Optional(f"pattern_{i}", default=pattern)] = str
+                schema_dict[vol.Optional(f"pattern_vlan_{i}", default=str(vlan_id))] = str
+            else:
+                schema_dict[vol.Optional(f"pattern_{i}", default="")] = str
+                schema_dict[vol.Optional(f"pattern_vlan_{i}", default="")] = str
+
+        return self.async_show_form(
+            step_id="vlan_detection",
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={
+                "description": (
+                    "Configure VLAN detection rules. Static mappings take precedence over "
+                    "patterns. Leave fields empty to remove rules. Patterns support basic "
+                    "regex (e.g., '.*iot.*' matches any interface containing 'iot'). "
+                    "Supports up to 5 static interface mappings and 3 pattern mappings."
+                )
             },
         )
 
