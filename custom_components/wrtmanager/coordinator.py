@@ -6,7 +6,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Pattern
+from typing import Any, Dict, List, Optional, Pattern, Set
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
@@ -246,6 +246,10 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         # Device tracking for roaming detection
         self._device_history: Dict[str, Dict] = {}  # MAC -> device history
 
+        # DHCP router tracking for optimization
+        self._dhcp_routers: Set[str] = set()  # Track which routers actually serve DHCP
+        self._tried_dhcp: Set[str] = set()  # Track which routers we've already tested
+
         # Compile regex patterns once for performance optimization
         self._vlan_pattern: Pattern[str] = re.compile(r"vlan(\d+)")
 
@@ -312,6 +316,36 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             # Use DHCP data from the first router that provides it
             if not dhcp_data and router_dhcp_data:
                 dhcp_data = router_dhcp_data
+
+        # Fallback: If no DHCP data was collected, try other routers that haven't been tested yet
+        if not dhcp_data:
+            _LOGGER.info("No DHCP data collected from known DHCP servers, trying fallback routers")
+            untested_routers = [
+                host
+                for host in self.sessions.keys()
+                if host not in self._dhcp_routers and host not in self._tried_dhcp
+            ]
+
+            for fallback_host in untested_routers:
+                try:
+                    session_id = self.sessions[fallback_host]
+                    client = self.routers[fallback_host]
+
+                    _LOGGER.debug("Fallback: trying DHCP on router %s", fallback_host)
+                    dhcp_leases = await client.get_dhcp_leases(session_id)
+                    static_hosts = await client.get_static_dhcp_hosts(session_id)
+
+                    if dhcp_leases or static_hosts:
+                        # Found DHCP data on fallback router
+                        self._dhcp_routers.add(fallback_host)
+                        dhcp_data = self._parse_dhcp_data(dhcp_leases, static_hosts)
+                        _LOGGER.info("Fallback: found DHCP data on router %s", fallback_host)
+                        break
+                    else:
+                        self._tried_dhcp.add(fallback_host)
+                except Exception as ex:
+                    _LOGGER.warning("Fallback DHCP query failed for %s: %s", fallback_host, ex)
+                    self._tried_dhcp.add(fallback_host)
 
         # Correlate and enrich device data
         enriched_devices = self._correlate_device_data(all_devices, dhcp_data)
@@ -451,21 +485,40 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             if wireless_status:
                 interface_data.update(wireless_status)
 
-            # Try to get DHCP data (usually only from main router)
-            _LOGGER.debug("Router %s - attempting to get DHCP leases...", host)
-            dhcp_leases = await client.get_dhcp_leases(session_id)
-            _LOGGER.debug("Router %s - DHCP leases result: %s", host, dhcp_leases)
+            # Smart DHCP polling - only query DHCP from known DHCP servers or untested routers
+            should_try_dhcp = host in self._dhcp_routers or host not in self._tried_dhcp
 
-            _LOGGER.debug("Router %s - attempting to get static DHCP hosts...", host)
-            static_hosts = await client.get_static_dhcp_hosts(session_id)
-            _LOGGER.debug("Router %s - static hosts result: %s", host, static_hosts)
+            if should_try_dhcp:
+                _LOGGER.debug("Router %s - attempting to get DHCP leases...", host)
+                dhcp_leases = await client.get_dhcp_leases(session_id)
+                _LOGGER.debug("Router %s - DHCP leases result: %s", host, dhcp_leases)
 
-            if dhcp_leases or static_hosts:
-                _LOGGER.debug("Router %s - parsing DHCP data", host)
-                dhcp_data = self._parse_dhcp_data(dhcp_leases, static_hosts)
-                _LOGGER.debug("Router %s - parsed DHCP data: %s", host, dhcp_data)
+                _LOGGER.debug("Router %s - attempting to get static DHCP hosts...", host)
+                static_hosts = await client.get_static_dhcp_hosts(session_id)
+                _LOGGER.debug("Router %s - static hosts result: %s", host, static_hosts)
+
+                if dhcp_leases or static_hosts:
+                    # Mark this router as a DHCP server
+                    self._dhcp_routers.add(host)
+                    _LOGGER.debug("Router %s - parsing DHCP data", host)
+                    dhcp_data = self._parse_dhcp_data(dhcp_leases, static_hosts)
+                    _LOGGER.debug("Router %s - parsed DHCP data: %s", host, dhcp_data)
+                else:
+                    # If this was previously a known DHCP server but now returns no data,
+                    # remove it from DHCP servers and mark as non-DHCP
+                    if host in self._dhcp_routers:
+                        _LOGGER.info(
+                            "Router %s - previously served DHCP but no longer provides data, "
+                            "removing from DHCP server list",
+                            host,
+                        )
+                        self._dhcp_routers.discard(host)
+
+                    # Mark as tested (no DHCP service detected)
+                    self._tried_dhcp.add(host)
+                    _LOGGER.debug("Router %s - no DHCP service detected", host)
             else:
-                _LOGGER.warning("Router %s - no DHCP data returned from ubus calls", host)
+                _LOGGER.debug("Router %s - skipping DHCP query (not a DHCP server)", host)
 
         except Exception as ex:
             _LOGGER.error("Error collecting data from %s: %s", host, ex)
