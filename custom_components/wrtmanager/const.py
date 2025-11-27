@@ -13,6 +13,7 @@ CONF_ROUTER_DESCRIPTION = "description"
 CONF_ROUTER_USE_HTTPS = "use_https"
 CONF_ROUTER_VERIFY_SSL = "verify_ssl"
 CONF_VLAN_NAMES = "vlan_names"
+CONF_VLAN_DETECTION_RULES = "vlan_detection_rules"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 # Default values
@@ -72,6 +73,23 @@ VLAN_NAMES = {
     20: "Work Network",
     100: "Guest Network",
     # Add your custom VLANs here
+}
+
+# Default VLAN detection rules
+DEFAULT_VLAN_DETECTION_RULES = {
+    "interface_patterns": {
+        # Interface name patterns (case-insensitive regex) -> VLAN ID
+        r".*(iot|smart|things).*": 3,
+        r".*(guest|visitor|public).*": 100,
+        r".*(main|default|lan).*": 1,
+        r".*ap1.*": 10,
+        r".*ap2.*": 100,
+        r".*ap0.*": 1,
+    },
+    "static_mappings": {
+        # Exact interface name -> VLAN ID mappings
+        # These take precedence over patterns
+    },
 }
 
 # Device types

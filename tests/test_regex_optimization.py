@@ -15,6 +15,7 @@ def mock_coordinator():
     """Create a minimal coordinator instance for testing."""
     from unittest.mock import Mock
 
+    from custom_components.wrtmanager.const import DEFAULT_VLAN_DETECTION_RULES
     from custom_components.wrtmanager.coordinator import WrtManagerCoordinator
 
     # Create a minimal mock that only has what we need for testing
@@ -22,6 +23,9 @@ def mock_coordinator():
 
     # Create the compiled regex pattern like the real coordinator does
     coordinator._vlan_pattern = re.compile(r"vlan(\d+)")
+
+    # Mock the config_entry.options.get method to return proper VLAN detection rules
+    coordinator.config_entry.options.get.return_value = DEFAULT_VLAN_DETECTION_RULES
 
     # Bind the real method to our mock object
     # This ensures we're testing the actual implementation, not a duplicate
