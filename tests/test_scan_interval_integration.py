@@ -75,6 +75,7 @@ async def test_setup_entry_uses_default_scan_interval(
     # Mock the coordinator instance
     mock_coordinator_instance = Mock()
     mock_coordinator_instance.async_config_entry_first_refresh = AsyncMock()
+    mock_coordinator_instance.async_refresh = AsyncMock()
     mock_coordinator_instance.last_update_success = True
     mock_coordinator_class.return_value = mock_coordinator_instance
 
@@ -104,6 +105,7 @@ async def test_setup_entry_uses_custom_scan_interval(
     # Mock the coordinator instance
     mock_coordinator_instance = Mock()
     mock_coordinator_instance.async_config_entry_first_refresh = AsyncMock()
+    mock_coordinator_instance.async_refresh = AsyncMock()
     mock_coordinator_instance.last_update_success = True
     mock_coordinator_class.return_value = mock_coordinator_instance
 
@@ -133,6 +135,7 @@ async def test_setup_entry_registers_update_listener(
     # Mock the coordinator instance
     mock_coordinator_instance = Mock()
     mock_coordinator_instance.async_config_entry_first_refresh = AsyncMock()
+    mock_coordinator_instance.async_refresh = AsyncMock()
     mock_coordinator_instance.last_update_success = True
     mock_coordinator_class.return_value = mock_coordinator_instance
 
@@ -188,6 +191,7 @@ async def test_setup_entry_coordinator_failure_with_custom_interval(
     # Mock coordinator to fail initial refresh
     mock_coordinator_instance = Mock()
     mock_coordinator_instance.async_config_entry_first_refresh = AsyncMock()
+    mock_coordinator_instance.async_refresh = AsyncMock()
     mock_coordinator_instance.last_update_success = False  # Simulate failure
     mock_coordinator_class.return_value = mock_coordinator_instance
 
