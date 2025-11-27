@@ -243,6 +243,37 @@ async def test_vlan_detection_invalid_vlan_ids(mock_config_entry):
 
 
 @pytest.mark.asyncio
+async def test_vlan_detection_invalid_interface_names(mock_config_entry):
+    """Test VLAN detection handles invalid interface names gracefully."""
+    options_flow = OptionsFlowHandler(mock_config_entry)
+
+    user_input = {
+        "static_interface_1": "wlan0\n-ap0",  # Invalid: contains newline
+        "static_vlan_1": "10",
+        "static_interface_2": "wlan0@ap1",  # Invalid: contains special character
+        "static_vlan_2": "20",
+        "static_interface_3": "wlan0\tap2",  # Invalid: contains tab
+        "static_vlan_3": "30",
+        "static_interface_4": "wlan0-ap3",  # Valid
+        "static_vlan_4": "40",
+    }
+
+    result = await options_flow.async_step_vlan_detection(user_input)
+
+    assert result["type"] == "create_entry"
+
+    vlan_rules = result["data"][CONF_VLAN_DETECTION_RULES]
+
+    # Only valid interface names should be saved
+    assert vlan_rules["static_mappings"] == {
+        "wlan0-ap3": 40,  # Only the valid interface name
+    }
+
+    # Pattern should be empty since we didn't provide any patterns
+    assert vlan_rules["interface_patterns"] == {}
+
+
+@pytest.mark.asyncio
 async def test_vlan_detection_navigation_from_init(mock_config_entry):
     """Test navigation from init step to VLAN detection step."""
     options_flow = OptionsFlowHandler(mock_config_entry)
