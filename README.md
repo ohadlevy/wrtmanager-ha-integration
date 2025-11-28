@@ -135,7 +135,23 @@ Automatically identifies and categorizes:
 ### Sensors
 - **System Monitoring**: Router uptime, memory usage, load average, temperature
 - **Network Statistics**: Device counts per VLAN and interface
+- **Router Traffic**: Comprehensive network traffic monitoring with breakdown by interface type
 - **SSID Status**: Binary sensors for SSID enabled/disabled state per router/area
+
+#### Router Traffic Sensor
+- **Entity**: `sensor.wrtmanager_{router_name}_router_traffic_total`
+- **Function**: Aggregates traffic data from all router interfaces for comprehensive network monitoring
+- **Unit**: Megabytes (MB) - cumulative totals since last router reboot
+- **Documentation**: See [Router Traffic Card Guide](docs/router-traffic-card.md) for detailed usage instructions
+- **Attributes**:
+  - Total traffic breakdown: `total_download_mb`, `total_upload_mb`
+  - WAN/Internet traffic: `wan_download_mb`, `wan_upload_mb`, `wan_total_mb`
+  - WiFi traffic: `wifi_download_mb`, `wifi_upload_mb`, `wifi_total_mb`
+  - Ethernet traffic: `ethernet_download_mb`, `ethernet_upload_mb`, `ethernet_total_mb`
+  - Other interfaces traffic: `other_download_mb`, `other_upload_mb`, `other_total_mb`
+  - Interface counts: `wan_interfaces`, `wifi_interfaces`, `ethernet_interfaces`, `other_interfaces`, `total_interfaces`
+  - Connected devices: `total_devices`, `wifi_devices`, `ethernet_devices`
+  - Router information: `router_name`, `router_host`
 
 ### Future Sensors (v1.0+)
 - **Signal Strength**: Real-time signal quality monitoring (currently available as attributes)
@@ -172,6 +188,34 @@ Automatic VLAN detection based on IP ranges:
 - `192.168.13.x` → Guest Network (VLAN 13)
 
 Custom VLAN mappings can be configured in the integration options.
+
+## Dashboard Examples
+
+WrtManager includes example dashboard configurations to help you get started with visualizing your network data:
+
+### Router Traffic Monitoring
+- **Router Traffic Cards**: [`examples/router-traffic-card.yaml`](examples/router-traffic-card.yaml) - Multiple card examples similar to GitHub issue #87, including comprehensive, compact, and advanced layouts
+- **Complete Dashboard**: [`examples/traffic-dashboard.yaml`](examples/traffic-dashboard.yaml) - Full-featured traffic monitoring dashboard with history graphs and detailed statistics
+- **Simple Card**: [`examples/traffic-card-simple.yaml`](examples/traffic-card-simple.yaml) - Minimal traffic card configuration for quick setup
+
+These examples showcase:
+- **Router Traffic Cards**: Various card styles for displaying total traffic, breakdown by interface type, device counts, and multi-router comparison
+- **Complete Dashboard**: Historical trends, interface statistics, and comprehensive monitoring
+- **Simple Cards**: Basic traffic overview and compact layouts
+- Traffic breakdown by interface type (WAN/Internet, WiFi, Ethernet)
+- Connected device monitoring with counts per interface type
+- Multi-router support for complex network setups
+
+**Getting Started with Dashboard Examples**:
+1. **For Quick Setup**: Start with [`router-traffic-card.yaml`](examples/router-traffic-card.yaml) Example 1 or 2
+2. **For Advanced Monitoring**: Use the complete dashboard from [`traffic-dashboard.yaml`](examples/traffic-dashboard.yaml)
+3. **For Minimal Display**: Use the simple card from [`traffic-card-simple.yaml`](examples/traffic-card-simple.yaml)
+
+**Setup Instructions**:
+1. Copy the desired YAML configuration
+2. Replace `main_router` with your actual router name in entity IDs (format: `sensor.wrtmanager_{router_name}_router_traffic_total`)
+3. Add to your Home Assistant dashboard using the YAML editor
+4. Install any required custom components (like `bar-card`) via HACS if using advanced examples
 
 ## Troubleshooting
 

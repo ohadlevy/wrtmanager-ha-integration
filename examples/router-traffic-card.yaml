@@ -1,0 +1,218 @@
+# Router Traffic Card Examples
+# These cards showcase different ways to display router traffic data similar to the GitHub issue #87 image
+# Copy any of these configurations into your Home Assistant dashboard
+
+# Example 1: Comprehensive Router Traffic Card (Similar to Issue #87 Image)
+# This card shows total traffic with detailed breakdown
+type: entities
+title: Router Traffic Monitor
+icon: mdi:router-wireless
+show_header_toggle: false
+entities:
+  # Main traffic display
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    name: Total Network Traffic
+    icon: mdi:chart-line-variant
+
+  # Traffic breakdown section
+  - type: section
+    label: Traffic Breakdown
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: wan_total_mb
+    name: Internet Traffic
+    suffix: " MB"
+    icon: mdi:web
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: wifi_total_mb
+    name: WiFi Traffic
+    suffix: " MB"
+    icon: mdi:wifi
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: ethernet_total_mb
+    name: Ethernet Traffic
+    suffix: " MB"
+    icon: mdi:ethernet-cable
+
+  # Download/Upload breakdown
+  - type: section
+    label: Download vs Upload
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: total_download_mb
+    name: Total Download
+    suffix: " MB"
+    icon: mdi:download
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: total_upload_mb
+    name: Total Upload
+    suffix: " MB"
+    icon: mdi:upload
+
+  # Device connections
+  - type: section
+    label: Connected Devices
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: total_devices
+    name: Total Devices
+    icon: mdi:devices
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: wifi_devices
+    name: WiFi Devices
+    icon: mdi:wifi
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: ethernet_devices
+    name: Ethernet Devices
+    icon: mdi:lan-connect
+
+---
+
+# Example 2: Compact Traffic Card for Smaller Dashboards
+type: vertical-stack
+cards:
+  # Main traffic overview
+  - type: glance
+    title: Router Traffic Summary
+    entities:
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        name: Total Traffic
+        icon: mdi:router-wireless
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        attribute: total_devices
+        name: Devices
+        icon: mdi:devices
+
+  # Traffic type breakdown
+  - type: horizontal-stack
+    cards:
+      - type: statistic
+        entity: sensor.wrtmanager_main_router_router_traffic_total
+        attribute: wan_total_mb
+        name: Internet
+        unit: MB
+        icon: mdi:web
+        graph: line
+        period: hour
+
+      - type: statistic
+        entity: sensor.wrtmanager_main_router_router_traffic_total
+        attribute: wifi_total_mb
+        name: WiFi
+        unit: MB
+        icon: mdi:wifi
+        graph: line
+        period: hour
+
+      - type: statistic
+        entity: sensor.wrtmanager_main_router_router_traffic_total
+        attribute: ethernet_total_mb
+        name: Ethernet
+        unit: MB
+        icon: mdi:ethernet-cable
+        graph: line
+        period: hour
+
+---
+
+# Example 3: Advanced Traffic Card with Progress Bars
+# Note: This requires the bar-card custom component (install via HACS)
+type: entities
+title: Router Traffic Analysis
+show_header_toggle: false
+entities:
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    name: Total Network Traffic
+    icon: mdi:router-wireless
+
+  - type: custom:bar-card
+    entity: sensor.wrtmanager_main_router_router_traffic_total
+    attribute: wan_total_mb
+    name: Internet Traffic
+    icon: mdi:web
+    unit_of_measurement: MB
+    max: 1000  # Adjust based on your typical traffic
+
+  - type: custom:bar-card
+    entity: sensor.wrtmanager_main_router_router_traffic_total
+    attribute: wifi_total_mb
+    name: WiFi Traffic
+    icon: mdi:wifi
+    unit_of_measurement: MB
+    max: 1000  # Adjust based on your typical traffic
+
+  - type: custom:bar-card
+    entity: sensor.wrtmanager_main_router_router_traffic_total
+    attribute: ethernet_total_mb
+    name: Ethernet Traffic
+    icon: mdi:ethernet-cable
+    unit_of_measurement: MB
+    max: 1000  # Adjust based on your typical traffic
+
+---
+
+# Example 4: Multi-Router Traffic Comparison
+# Use this if you have multiple routers configured
+type: entities
+title: Multi-Router Traffic Comparison
+show_header_toggle: false
+entities:
+  # Main router
+  - type: section
+    label: Main Router
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    name: Main Router Traffic
+    icon: mdi:router-wireless
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: total_devices
+    name: Connected Devices
+    icon: mdi:devices
+
+  # Secondary router (if applicable)
+  - type: section
+    label: Secondary Router
+
+  - entity: sensor.wrtmanager_secondary_router_router_traffic_total
+    name: Secondary Router Traffic
+    icon: mdi:router-wireless
+
+  - entity: sensor.wrtmanager_secondary_router_router_traffic_total
+    type: attribute
+    attribute: total_devices
+    name: Connected Devices
+    icon: mdi:devices
+
+---
+
+# Usage Instructions:
+# 1. Replace "main_router" with your actual router name in all entity IDs
+# 2. Entity format: sensor.wrtmanager_{router_name}_router_traffic_total
+# 3. Adjust the max values in bar cards based on your network usage
+# 4. For multi-router setups, add additional router entities as needed
+# 5. Install required custom components (bar-card) via HACS if using advanced examples
+
+# Available Attributes:
+# - total_download_mb, total_upload_mb: Total traffic
+# - wan_download_mb, wan_upload_mb, wan_total_mb: Internet traffic
+# - wifi_download_mb, wifi_upload_mb, wifi_total_mb: WiFi traffic
+# - ethernet_download_mb, ethernet_upload_mb, ethernet_total_mb: Ethernet traffic
+# - other_download_mb, other_upload_mb, other_total_mb: Other interfaces
+# - total_devices, wifi_devices, ethernet_devices: Device counts
+# - wan_interfaces, wifi_interfaces, ethernet_interfaces: Interface counts
+# - router_name, router_host: Router information
