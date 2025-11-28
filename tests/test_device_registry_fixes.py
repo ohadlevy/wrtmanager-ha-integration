@@ -55,60 +55,28 @@ class TestDeviceRegistryFixes:
             expected_unique_id = "wrtmanager_192_168_1_1_2e_34_e7_d0_21_aa_presence"
             assert sensor.unique_id == expected_unique_id
 
-    def test_unique_id_different_routers(self):
+    def test_unique_id_different_routers(self, mock_coordinator):
         """Test that same device on different routers gets different unique IDs."""
-        # Create coordinator with device on first router
-        coordinator1 = Mock()
-        coordinator1.data = {
-            "devices": [
-                {
-                    "mac_address": "2E:34:E7:D0:21:AA",
-                    "hostname": "test-device",
-                    "vendor": "Apple",
-                    "device_type": "Mobile Device",
-                    "router": "192.168.1.1",
-                    "connected": True,
-                }
-            ]
-        }
+        config_entry1 = Mock()
+        config_entry1.data = {"host": "192.168.1.1"}
 
-        # Create coordinator with device on second router
-        coordinator2 = Mock()
-        coordinator2.data = {
-            "devices": [
-                {
-                    "mac_address": "2E:34:E7:D0:21:AA",
-                    "hostname": "test-device",
-                    "vendor": "Apple",
-                    "device_type": "Mobile Device",
-                    "router": "192.168.1.2",
-                    "connected": True,
-                }
-            ]
-        }
-
-        config_entry = Mock()
-        config_entry.data = {
-            "routers": [
-                {"host": "192.168.1.1", "name": "Router1"},
-                {"host": "192.168.1.2", "name": "Router2"},
-            ]
-        }
+        config_entry2 = Mock()
+        config_entry2.data = {"host": "192.168.1.2"}
 
         with patch("custom_components.wrtmanager.binary_sensor.dr"):
             mock_hass = Mock()
 
             sensor1 = WrtDevicePresenceSensor(
-                coordinator=coordinator1,
+                coordinator=mock_coordinator,
                 mac="2E:34:E7:D0:21:AA",
-                config_entry=config_entry,
+                config_entry=config_entry1,
             )
             sensor1.hass = mock_hass
 
             sensor2 = WrtDevicePresenceSensor(
-                coordinator=coordinator2,
+                coordinator=mock_coordinator,
                 mac="2E:34:E7:D0:21:AA",
-                config_entry=config_entry,
+                config_entry=config_entry2,
             )
             sensor2.hass = mock_hass
 
