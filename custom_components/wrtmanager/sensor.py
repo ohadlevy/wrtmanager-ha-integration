@@ -153,6 +153,11 @@ async def async_setup_entry(
 
             _LOGGER.info("Created traffic sensors for %s interfaces", len(router_interfaces))
 
+            # Create router traffic card sensor (aggregated traffic view)
+            entities.append(
+                WrtManagerRouterTrafficCardSensor(coordinator, router_host, router_name)
+            )
+
     async_add_entities(entities)
     _LOGGER.info("Set up %d sensors for %d routers", len(entities), len(routers))
 
@@ -840,5 +845,187 @@ class WrtManagerSignalQualitySensor(WrtManagerSensorBase):
                         "poor_percent": round((quality_counts["Poor"] / total) * 100, 1),
                     }
                 )
+
+        return attributes
+
+
+class WrtManagerRouterTrafficCardSensor(WrtManagerSensorBase):
+    """Sensor that aggregates traffic data from all router interfaces for a traffic card view."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        router_host: str,
+        router_name: str,
+    ):
+        """Initialize the router traffic card sensor."""
+        super().__init__(
+            coordinator, router_host, router_name, "router_traffic_total", "Total Traffic"
+        )
+        self._attr_device_class = SensorDeviceClass.DATA_SIZE
+        self._attr_native_unit_of_measurement = UNIT_MEGABYTES
+        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_icon = "mdi:router-wireless"
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return total traffic (download + upload) across all interfaces in MB."""
+        return self._get_total_traffic()
+
+    def _get_total_traffic(self) -> float:
+        """Calculate total traffic across all interfaces."""
+        agg_data = self._get_aggregated_traffic_data()
+
+        # Sum all categorized traffic including "other" interfaces
+        total_download = (
+            agg_data["wan_traffic"]["download"]
+            + agg_data["wifi_traffic"]["download"]
+            + agg_data["ethernet_traffic"]["download"]
+            + agg_data["other_traffic"]["download"]
+        )
+        total_upload = (
+            agg_data["wan_traffic"]["upload"]
+            + agg_data["wifi_traffic"]["upload"]
+            + agg_data["ethernet_traffic"]["upload"]
+            + agg_data["other_traffic"]["upload"]
+        )
+
+        return total_download + total_upload
+
+    def _get_aggregated_traffic_data(self) -> Dict[str, Any]:
+        """Get all traffic and interface data in a single pass through interfaces."""
+        if not self.coordinator.data or "interfaces" not in self.coordinator.data:
+            return {
+                "wan_traffic": {"download": 0, "upload": 0},
+                "wifi_traffic": {"download": 0, "upload": 0},
+                "ethernet_traffic": {"download": 0, "upload": 0},
+                "other_traffic": {"download": 0, "upload": 0},
+                "interface_counts": {"wan": 0, "wifi": 0, "ethernet": 0, "other": 0},
+            }
+
+        router_interfaces = self.coordinator.data["interfaces"].get(self._router_host, {})
+        wan_traffic = {"download": 0, "upload": 0}
+        wifi_traffic = {"download": 0, "upload": 0}
+        ethernet_traffic = {"download": 0, "upload": 0}
+        other_traffic = {"download": 0, "upload": 0}
+        interface_counts = {"wan": 0, "wifi": 0, "ethernet": 0, "other": 0}
+
+        for interface_name, interface_data in router_interfaces.items():
+            stats = interface_data.get("statistics", {})
+            if not stats:
+                continue
+
+            rx_bytes = stats.get("rx_bytes", 0) or 0
+            tx_bytes = stats.get("tx_bytes", 0) or 0
+            download_mb = round(rx_bytes / (1024 * 1024), 2)
+            upload_mb = round(tx_bytes / (1024 * 1024), 2)
+
+            # Categorize interface and accumulate traffic
+            if self._is_wan_interface(interface_name):
+                wan_traffic["download"] += download_mb
+                wan_traffic["upload"] += upload_mb
+                interface_counts["wan"] += 1
+            elif (
+                interface_name.startswith("wlan")
+                or "phy" in interface_name.lower()
+                or "ap" in interface_name.lower()
+            ):
+                wifi_traffic["download"] += download_mb
+                wifi_traffic["upload"] += upload_mb
+                interface_counts["wifi"] += 1
+            elif interface_name.startswith("eth"):
+                ethernet_traffic["download"] += download_mb
+                ethernet_traffic["upload"] += upload_mb
+                interface_counts["ethernet"] += 1
+            else:
+                other_traffic["download"] += download_mb
+                other_traffic["upload"] += upload_mb
+                interface_counts["other"] += 1
+
+        return {
+            "wan_traffic": wan_traffic,
+            "wifi_traffic": wifi_traffic,
+            "ethernet_traffic": ethernet_traffic,
+            "other_traffic": other_traffic,
+            "interface_counts": interface_counts,
+        }
+
+    def _get_connected_devices_info(self) -> Dict[str, Any]:
+        """Get connected devices information for the traffic card."""
+        router_devices = self._get_router_devices()
+        if not router_devices:
+            return {"total": 0, "wifi": 0, "ethernet": 0}
+
+        wifi_devices = 0
+        ethernet_devices = 0
+
+        for device in router_devices:
+            interface = device.get(ATTR_INTERFACE, "")
+            if interface.startswith("wlan") or "ap" in interface.lower():
+                wifi_devices += 1
+            elif interface.startswith("eth"):
+                ethernet_devices += 1
+
+        return {
+            "total": len(router_devices),
+            "wifi": wifi_devices,
+            "ethernet": ethernet_devices,
+        }
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return detailed traffic breakdown and router information."""
+        agg_data = self._get_aggregated_traffic_data()
+        wan_traffic = agg_data["wan_traffic"]
+        wifi_traffic = agg_data["wifi_traffic"]
+        ethernet_traffic = agg_data["ethernet_traffic"]
+        other_traffic = agg_data["other_traffic"]
+        interface_counts = agg_data["interface_counts"]
+        device_info = self._get_connected_devices_info()
+
+        attributes = {
+            # Total traffic breakdown (now includes other interfaces)
+            "total_download_mb": (
+                wan_traffic["download"]
+                + wifi_traffic["download"]
+                + ethernet_traffic["download"]
+                + other_traffic["download"]
+            ),
+            "total_upload_mb": (
+                wan_traffic["upload"]
+                + wifi_traffic["upload"]
+                + ethernet_traffic["upload"]
+                + other_traffic["upload"]
+            ),
+            # WAN/Internet traffic
+            "wan_download_mb": wan_traffic["download"],
+            "wan_upload_mb": wan_traffic["upload"],
+            "wan_total_mb": wan_traffic["download"] + wan_traffic["upload"],
+            # WiFi traffic
+            "wifi_download_mb": wifi_traffic["download"],
+            "wifi_upload_mb": wifi_traffic["upload"],
+            "wifi_total_mb": wifi_traffic["download"] + wifi_traffic["upload"],
+            # Ethernet traffic
+            "ethernet_download_mb": ethernet_traffic["download"],
+            "ethernet_upload_mb": ethernet_traffic["upload"],
+            "ethernet_total_mb": ethernet_traffic["download"] + ethernet_traffic["upload"],
+            # Other interfaces traffic (bridges, loopback, etc.)
+            "other_download_mb": other_traffic["download"],
+            "other_upload_mb": other_traffic["upload"],
+            "other_total_mb": other_traffic["download"] + other_traffic["upload"],
+            # Interface counts
+            "wan_interfaces": interface_counts["wan"],
+            "wifi_interfaces": interface_counts["wifi"],
+            "ethernet_interfaces": interface_counts["ethernet"],
+            "other_interfaces": interface_counts["other"],
+            "total_interfaces": sum(interface_counts.values()),
+            # Connected devices
+            "total_devices": device_info["total"],
+            "wifi_devices": device_info["wifi"],
+            "ethernet_devices": device_info["ethernet"],
+            # Router info
+            "router_name": self._router_name,
+            "router_host": self._router_host,
+        }
 
         return attributes

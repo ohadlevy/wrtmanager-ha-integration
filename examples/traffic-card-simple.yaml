@@ -1,0 +1,112 @@
+# Simple Router Traffic Card Example
+# This is a minimal card configuration for displaying router traffic information
+# Copy this YAML into any dashboard or use it as a starting point
+
+# Simple Traffic Overview Card
+type: entities
+title: Router Traffic
+show_header_toggle: false
+entities:
+  # Main traffic sensor - shows total traffic across all interfaces
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    name: Total Network Traffic
+    icon: mdi:router-wireless
+
+  # Traffic breakdown by type
+  - type: divider
+    style:
+      height: 1px
+      background: var(--divider-color)
+      margin: 8px 0
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: wan_total_mb
+    name: Internet Traffic
+    suffix: " MB"
+    icon: mdi:web
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: wifi_total_mb
+    name: WiFi Traffic
+    suffix: " MB"
+    icon: mdi:wifi
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: ethernet_total_mb
+    name: Ethernet Traffic
+    suffix: " MB"
+    icon: mdi:ethernet
+
+  # Device information
+  - type: divider
+    style:
+      height: 1px
+      background: var(--divider-color)
+      margin: 8px 0
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: total_devices
+    name: Connected Devices
+    icon: mdi:devices
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: wifi_devices
+    name: WiFi Devices
+    icon: mdi:wifi
+
+  - entity: sensor.wrtmanager_main_router_router_traffic_total
+    type: attribute
+    attribute: ethernet_devices
+    name: Ethernet Devices
+    icon: mdi:ethernet
+
+---
+
+# Alternative: Compact Grid Layout
+type: grid
+title: Network Traffic Summary
+columns: 2
+square: false
+cards:
+  - type: statistic
+    entity: sensor.wrtmanager_main_router_router_traffic_total
+    name: Total Traffic
+    icon: mdi:router-wireless
+    period: hour
+
+  - type: statistic
+    entity: sensor.wrtmanager_main_router_router_traffic_total
+    attribute: total_devices
+    name: Devices
+    icon: mdi:devices
+    period: hour
+
+  - type: statistic
+    entity: sensor.wrtmanager_main_router_router_traffic_total
+    attribute: wan_total_mb
+    name: Internet
+    unit: MB
+    icon: mdi:web
+    period: hour
+
+  - type: statistic
+    entity: sensor.wrtmanager_main_router_router_traffic_total
+    attribute: wifi_total_mb
+    name: WiFi
+    unit: MB
+    icon: mdi:wifi
+    period: hour
+
+---
+
+# Notes:
+# 1. Replace "main_router" in the entity names with your actual router name
+# 2. Entity name format: sensor.wrtmanager_{router_name}_router_traffic_total
+# 3. All attributes are available as shown in the sensor implementation
+# 4. Traffic values are in megabytes (MB) and represent cumulative totals
+# 5. Values reset when the router reboots or interface counters reset

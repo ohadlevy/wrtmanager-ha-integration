@@ -31,184 +31,17 @@ from .const import (
     CONF_ROUTER_USE_HTTPS,
     CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
-    CONF_VLAN_DETECTION_RULES,
     DATA_SOURCE_DYNAMIC_DHCP,
     DATA_SOURCE_STATIC_DHCP,
     DATA_SOURCE_WIFI_ONLY,
     DEFAULT_USE_HTTPS,
     DEFAULT_VERIFY_SSL,
-    DEFAULT_VLAN_DETECTION_RULES,
     ROAMING_DETECTION_THRESHOLD,
 )
 from .device_manager import DeviceManager
 from .ubus_client import UbusClient, UbusClientError
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _validate_regex_pattern(pattern: str) -> bool:
-    """Validate regex pattern for safety against ReDoS attacks.
-
-    Args:
-        pattern: The regex pattern to validate
-
-    Returns:
-        True if the pattern is safe to use, False otherwise
-    """
-    if len(pattern) > 100:  # Reasonable length limit
-        return False
-
-    # Block known dangerous patterns that can cause ReDoS
-    # Check for actual dangerous patterns (not escaped strings)
-    dangerous_patterns = [
-        r"\+\)+",  # (a+)+ type patterns
-        r"\*\)+",  # (a*)+ type patterns
-        r"\+\*",  # a+* type patterns
-        r"\*\*",  # a** type patterns (though invalid syntax)
-        r"\(\*",  # (*... patterns
-        r"\(\+",  # (+... patterns
-        r"\)\+\*",  # )+* patterns
-        r"\)\*\+",  # )*+ patterns
-        r"\+\+",  # ++ patterns
-    ]
-
-    # Check for actual ReDoS-vulnerable patterns using better detection
-    import re as re_module
-
-    try:
-        # First check if it compiles
-        compiled = re_module.compile(pattern)
-
-        # Check for dangerous pattern combinations
-        for danger in dangerous_patterns:
-            if re_module.search(danger, pattern):
-                return False
-
-        # Check for nested quantifiers which are the main ReDoS cause
-        # Look for patterns like (a+)+ or (a*)* or (a+)*
-        nested_quantifier_pattern = r"\([^)]*[*+][^)]*\)[*+]"
-        if re_module.search(nested_quantifier_pattern, pattern):
-            return False
-
-        # Check for alternation with overlapping patterns
-        # This is a simplified check for patterns like (a+|a)*
-        alternation_overlap_pattern = r"\([^|]*\+[^|]*\|[^)]*\*[^)]*\)[*+]"
-        if re_module.search(alternation_overlap_pattern, pattern):
-            return False
-
-        # Check for dangerous quantifier patterns with high repetition counts
-        # Patterns like (.*a){10,} or (.+){5,} can be very slow
-        high_rep_pattern = r"\([^)]*[.*+][^)]*\)\{[0-9]+,"
-        if re_module.search(high_rep_pattern, pattern):
-            return False
-
-        # Check for character classes with unlimited quantifiers inside groups
-        # Patterns like ([a-zA-Z]+)* can be dangerous
-        char_class_quantifier_pattern = r"\(\[[^\]]*\]\+[^)]*\)[*+]"
-        if re_module.search(char_class_quantifier_pattern, pattern):
-            return False
-
-        # Check for (.+)* or (.*)+ patterns which are extremely dangerous
-        any_char_quantifier_pattern = r"\(\.[*+]\)[*+]"
-        if re_module.search(any_char_quantifier_pattern, pattern):
-            return False
-
-        # Test with progressively complex strings that could trigger ReDoS
-        # Use simple synchronous testing instead of threading for validation
-        try:
-            test_strings = [
-                "test_string",
-                "a" * 50 + "b",
-                "aaa" * 20 + "bbb" * 20 + "x",  # More complex test
-            ]
-
-            for test_str in test_strings:
-                compiled.search(test_str)
-
-        except Exception:
-            return False
-
-        return True
-
-    except (re_module.error, Exception):
-        return False
-
-
-def _determine_vlan_with_rules(device: Dict[str, Any], vlan_rules: Dict[str, Any]) -> int:
-    """Determine VLAN ID from device information using configurable rules.
-
-    Standalone function for easier testing.
-
-    Args:
-        device: Device information dictionary
-        vlan_rules: VLAN detection rules configuration
-
-    Returns:
-        VLAN ID as integer
-    """
-    interface = device.get(ATTR_INTERFACE, "")
-
-    static_mappings = vlan_rules.get("static_mappings", {})
-    interface_patterns = vlan_rules.get("interface_patterns", {})
-
-    if interface:
-        # First, check static mappings (exact interface name matches)
-        if interface in static_mappings:
-            return static_mappings[interface]
-
-        # Check for explicit VLAN tags in interface names
-        # (checked before configurable patterns but after static mappings)
-        interface_lower = interface.lower()
-        if "vlan" in interface_lower:
-            # Extract VLAN ID from names like "wlan0-vlan3", "phy0-ap1-vlan13"
-            vlan_match = re.search(r"vlan(\d+)", interface_lower)
-            if vlan_match:
-                return int(vlan_match.group(1))
-
-        # Then, check configurable patterns (pre-validated in config flow)
-        for pattern, vlan_id in interface_patterns.items():
-            try:
-                if re.search(pattern, interface, re.IGNORECASE):
-                    return vlan_id
-            except re.error:
-                # Skip invalid patterns (should be rare due to config flow validation)
-                continue
-
-        # Fall back to hardcoded patterns if no custom rules match
-        # Check for common naming patterns (generic, not network-specific)
-        if any(keyword in interface_lower for keyword in ["iot", "smart", "things"]):
-            return 3  # Common IoT VLAN
-        elif any(keyword in interface_lower for keyword in ["guest", "visitor", "public"]):
-            return 100  # Common Guest VLAN
-        elif any(keyword in interface_lower for keyword in ["main", "default", "lan"]):
-            return 1  # Main VLAN
-
-        # Check for multi-AP interface patterns (ap0=main, ap1=secondary, ap2=guest)
-        elif "ap1" in interface_lower:
-            return 10  # Secondary network
-        elif "ap2" in interface_lower:
-            return 100  # Guest network
-        elif "ap0" in interface_lower:
-            return 1  # Main network
-
-    # For devices with IP addresses, try to infer from common subnet patterns
-    ip = device.get(ATTR_IP)
-    if ip:
-        # Common patterns - these are generic enough for most networks
-        ip_parts = ip.split(".")
-        if len(ip_parts) >= 3:
-            third_octet = ip_parts[2]
-            # Many networks use the third octet to indicate VLAN
-            try:
-                vlan_candidate = int(third_octet)
-                # Only return as VLAN if it's a reasonable VLAN ID (1-4094)
-                if 1 <= vlan_candidate <= 4094:
-                    return vlan_candidate
-            except ValueError:
-                # If IP segment is not an integer, fall back to default VLAN
-                pass
-
-    return 1  # Default to main VLAN
 
 
 class WrtManagerCoordinator(DataUpdateCoordinator):
@@ -598,12 +431,56 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         return enriched_devices
 
     def _determine_vlan(self, device: Dict[str, Any]) -> int:
-        """Determine VLAN ID from device information using configurable rules."""
-        # Get VLAN detection rules from options or use defaults
-        vlan_rules = self.config_entry.options.get(
-            CONF_VLAN_DETECTION_RULES, DEFAULT_VLAN_DETECTION_RULES
-        )
-        return _determine_vlan_with_rules(device, vlan_rules)
+        """Determine VLAN ID from device information."""
+        interface = device.get(ATTR_INTERFACE, "")
+
+        # Try to determine VLAN from WiFi interface name patterns
+        if interface:
+            # Common OpenWrt VLAN interface naming patterns
+            interface_lower = interface.lower()
+
+            # Check for explicit VLAN tags in interface names
+            if "vlan" in interface_lower:
+                # Extract VLAN ID from names like "wlan0-vlan3", "phy0-ap1-vlan13"
+                vlan_match = re.search(r"vlan(\d+)", interface_lower)
+                if vlan_match:
+                    return int(vlan_match.group(1))
+
+            # Check for common naming patterns (generic, not network-specific)
+            if any(keyword in interface_lower for keyword in ["iot", "smart", "things"]):
+                return 3  # Common IoT VLAN
+            elif any(keyword in interface_lower for keyword in ["guest", "visitor", "public"]):
+                return 100  # Common Guest VLAN
+            elif any(keyword in interface_lower for keyword in ["main", "default", "lan"]):
+                return 1  # Main VLAN
+
+            # Check for multi-AP interface patterns (ap0=main, ap1=secondary, ap2=guest)
+            elif "ap1" in interface_lower:
+                return 10  # Secondary network
+            elif "ap2" in interface_lower:
+                return 100  # Guest network
+            elif "ap0" in interface_lower:
+                return 1  # Main network
+
+        # For devices with IP addresses, try to infer from common subnet patterns
+        ip = device.get(ATTR_IP)
+        if ip:
+            # Common patterns - these are generic enough for most networks
+            ip_parts = ip.split(".")
+            if len(ip_parts) >= 3:
+                third_octet = ip_parts[2]
+                # Many networks use the third octet to indicate VLAN
+                try:
+                    vlan_candidate = int(third_octet)
+                    # Only return as VLAN if it's a reasonable VLAN ID (1-4094)
+                    if 1 <= vlan_candidate <= 4094:
+                        return vlan_candidate
+                except ValueError:
+                    # If the third octet is not an integer, we cannot infer a VLAN ID from it.
+                    # This is expected for some devices; default VLAN will be used below.
+                    pass
+
+        return 1  # Default to main VLAN
 
     def _update_roaming_detection(self, devices: List[Dict[str, Any]]) -> None:
         """Update roaming detection for devices."""

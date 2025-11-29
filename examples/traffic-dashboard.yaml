@@ -1,0 +1,220 @@
+# WrtManager Router Traffic Dashboard Example
+# This is a complete Lovelace dashboard configuration showcasing the router traffic card sensor
+# Copy this YAML into your Home Assistant dashboard editor
+
+title: Router Network Traffic
+path: router-traffic
+theme: default
+badges: []
+cards:
+  # Main Router Traffic Overview Card
+  - type: entities
+    title: Network Traffic Overview
+    show_header_toggle: false
+    entities:
+      - type: custom:mushroom-entity-card
+        entity: sensor.wrtmanager_main_router_router_traffic_total
+        name: Total Network Traffic
+        icon: mdi:router-wireless
+        primary_info: name
+        secondary_info: state
+        tap_action:
+          action: more-info
+      - type: divider
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: total_download_mb
+        name: Total Download
+        suffix: " MB"
+        icon: mdi:download
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: total_upload_mb
+        name: Total Upload
+        suffix: " MB"
+        icon: mdi:upload
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: total_devices
+        name: Connected Devices
+        icon: mdi:devices
+
+  # Traffic Breakdown by Interface Type
+  - type: grid
+    square: false
+    columns: 2
+    cards:
+      # WAN Traffic Card
+      - type: statistic
+        entity: sensor.wrtmanager_main_router_router_traffic_total
+        name: WAN Traffic
+        attribute: wan_total_mb
+        unit: MB
+        icon: mdi:web
+        graph: line
+        period: hour
+
+      # WiFi Traffic Card
+      - type: statistic
+        entity: sensor.wrtmanager_main_router_router_traffic_total
+        name: WiFi Traffic
+        attribute: wifi_total_mb
+        unit: MB
+        icon: mdi:wifi
+        graph: line
+        period: hour
+
+      # Ethernet Traffic Card
+      - type: statistic
+        entity: sensor.wrtmanager_main_router_router_traffic_total
+        name: Ethernet Traffic
+        attribute: ethernet_total_mb
+        unit: MB
+        icon: mdi:ethernet
+        graph: line
+        period: hour
+
+      # Device Connections
+      - type: statistic
+        entity: sensor.wrtmanager_main_router_router_traffic_total
+        name: Connected Devices
+        attribute: total_devices
+        icon: mdi:account-multiple
+        graph: line
+        period: hour
+
+  # Detailed Traffic Breakdown
+  - type: entities
+    title: Traffic Details
+    show_header_toggle: false
+    entities:
+      - type: section
+        label: WAN/Internet Traffic
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: wan_download_mb
+        name: WAN Download
+        suffix: " MB"
+        icon: mdi:download
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: wan_upload_mb
+        name: WAN Upload
+        suffix: " MB"
+        icon: mdi:upload
+
+      - type: section
+        label: WiFi Traffic
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: wifi_download_mb
+        name: WiFi Download
+        suffix: " MB"
+        icon: mdi:download
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: wifi_upload_mb
+        name: WiFi Upload
+        suffix: " MB"
+        icon: mdi:upload
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: wifi_devices
+        name: WiFi Devices
+        icon: mdi:wifi
+
+      - type: section
+        label: Ethernet Traffic
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: ethernet_download_mb
+        name: Ethernet Download
+        suffix: " MB"
+        icon: mdi:download
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: ethernet_upload_mb
+        name: Ethernet Upload
+        suffix: " MB"
+        icon: mdi:upload
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: ethernet_devices
+        name: Ethernet Devices
+        icon: mdi:ethernet
+
+  # Interface Statistics
+  - type: entities
+    title: Interface Statistics
+    show_header_toggle: false
+    entities:
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: total_interfaces
+        name: Total Interfaces
+        icon: mdi:lan
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: wan_interfaces
+        name: WAN Interfaces
+        icon: mdi:web
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: wifi_interfaces
+        name: WiFi Interfaces
+        icon: mdi:wifi
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: ethernet_interfaces
+        name: Ethernet Interfaces
+        icon: mdi:ethernet
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: other_interfaces
+        name: Other Interfaces
+        icon: mdi:lan
+
+  # Historical Traffic Chart
+  - type: history-graph
+    title: Traffic Trend (Last 24 Hours)
+    hours_to_show: 24
+    refresh_interval: 0
+    entities:
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        name: Total Traffic
+
+  # Router Information
+  - type: entities
+    title: Router Information
+    show_header_toggle: false
+    entities:
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: router_name
+        name: Router Name
+        icon: mdi:router-wireless
+      - entity: sensor.wrtmanager_main_router_router_traffic_total
+        type: attribute
+        attribute: router_host
+        name: Router IP
+        icon: mdi:ip-network
+
+# Advanced Dashboard with ApexCharts (requires custom:apexcharts-card)
+# Uncomment this section if you have ApexCharts card installed
+#
+#  - type: custom:apexcharts-card
+#    title: Network Traffic Distribution
+#    graph_span: 24h
+#    apex_config:
+#      chart:
+#        type: pie
+#    series:
+#      - entity: sensor.wrtmanager_main_router_router_traffic_total
+#        attribute: wan_total_mb
+#        name: WAN Traffic
+#      - entity: sensor.wrtmanager_main_router_router_traffic_total
+#        attribute: wifi_total_mb
+#        name: WiFi Traffic
+#      - entity: sensor.wrtmanager_main_router_router_traffic_total
+#        attribute: ethernet_total_mb
+#        name: Ethernet Traffic

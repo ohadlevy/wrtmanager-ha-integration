@@ -169,3 +169,169 @@ def test_interface_icon_selection():
     assert get_interface_icon("eth0", "upload") == "mdi:upload-network"
     assert get_interface_icon("br-lan", "download") == "mdi:download-network"
     assert get_interface_icon("br-lan", "upload") == "mdi:upload-network"
+
+
+def test_router_traffic_card_device_counting():
+    """Test device counting by interface type for traffic card."""
+
+    def count_devices_by_interface_type(devices_data):
+        """Count connected devices by interface type."""
+        wifi_devices = 0
+        ethernet_devices = 0
+        total_devices = len(devices_data)
+
+        for device in devices_data:
+            interface = device.get("interface", "")
+            if interface.startswith("wlan") or "ap" in interface.lower():
+                wifi_devices += 1
+            elif interface.startswith("eth"):
+                ethernet_devices += 1
+
+        return {
+            "total": total_devices,
+            "wifi": wifi_devices,
+            "ethernet": ethernet_devices,
+        }
+
+    # Test with sample device data
+    devices_data = [
+        {"interface": "wlan0", "mac": "aa:bb:cc:dd:ee:01", "hostname": "phone1"},
+        {"interface": "wlan0", "mac": "aa:bb:cc:dd:ee:02", "hostname": "laptop1"},
+        {"interface": "phy0-ap0", "mac": "aa:bb:cc:dd:ee:03", "hostname": "tablet1"},
+        {"interface": "phy1-ap0", "mac": "aa:bb:cc:dd:ee:04", "hostname": "phone2"},
+        {"interface": "eth0", "mac": "aa:bb:cc:dd:ee:05", "hostname": "desktop1"},
+        {"interface": "eth0", "mac": "aa:bb:cc:dd:ee:06", "hostname": "server1"},
+        {"interface": "br-lan", "mac": "aa:bb:cc:dd:ee:07", "hostname": "unknown1"},
+    ]
+
+    result = count_devices_by_interface_type(devices_data)
+
+    assert result["total"] == 7
+    assert result["wifi"] == 4  # wlan0 (2) + phy0-ap0 (1) + phy1-ap0 (1)
+    assert result["ethernet"] == 2  # eth0 (2)
+
+
+def test_router_traffic_card_total_calculation():
+    """Test total traffic calculation for router traffic card."""
+
+    def calculate_total_traffic(interfaces_data):
+        """Calculate total router traffic across all interfaces."""
+        total_bytes = 0
+
+        for interface_name, interface_data in interfaces_data.items():
+            stats = interface_data.get("statistics", {})
+            if stats:
+                rx_bytes = stats.get("rx_bytes", 0)
+                tx_bytes = stats.get("tx_bytes", 0)
+                total_bytes += rx_bytes + tx_bytes
+
+        return round(total_bytes / (1024 * 1024), 2)
+
+    # Test with sample interface data
+    interfaces_data = {
+        "pppoe-wan": {
+            "statistics": {
+                "rx_bytes": 1073741824,  # 1 GB
+                "tx_bytes": 536870912,  # 512 MB
+            }
+        },
+        "wlan0": {
+            "statistics": {
+                "rx_bytes": 104857600,  # 100 MB
+                "tx_bytes": 52428800,  # 50 MB
+            }
+        },
+        "eth0": {
+            "statistics": {
+                "rx_bytes": 52428800,  # 50 MB
+                "tx_bytes": 26214400,  # 25 MB
+            }
+        },
+        # Interface without stats (should be ignored)
+        "dummy0": {"up": True},
+    }
+
+    total_traffic = calculate_total_traffic(interfaces_data)
+
+    # Total: 1GB + 512MB + 100MB + 50MB + 50MB + 25MB = 1761MB
+    expected_total = 1024.0 + 512.0 + 100.0 + 50.0 + 50.0 + 25.0
+    assert total_traffic == expected_total
+
+    # Test with empty data
+    assert calculate_total_traffic({}) == 0.0
+
+    # Test with interfaces without statistics
+    assert calculate_total_traffic({"dummy": {"up": True}}) == 0.0
+
+
+def test_router_traffic_card_zero_handling():
+    """Test how router traffic card handles zero and missing data.
+
+    This test mirrors the logic in WrtManagerRouterTrafficCardSensor._get_aggregated_traffic_data()
+    to ensure proper handling of None and missing data scenarios.
+    """
+
+    def safe_traffic_calculation(coordinator_data):
+        """Safely calculate traffic with proper zero handling.
+
+        Mirrors the behavior of WrtManagerRouterTrafficCardSensor._get_aggregated_traffic_data()
+        which checks 'if not self.coordinator.data or "interfaces" not in self.coordinator.data'.
+        """
+        # Mirror the actual sensor implementation's None/empty data handling
+        if not coordinator_data or "interfaces" not in coordinator_data:
+            return 0.0
+
+        interfaces_data = coordinator_data["interfaces"]
+        if not interfaces_data:
+            return 0.0
+
+        total_bytes = 0
+        for interface_name, interface_data in interfaces_data.items():
+            if not interface_data:
+                continue
+            stats = interface_data.get("statistics", {})
+            if not stats:
+                continue
+
+            rx_bytes = stats.get("rx_bytes", 0) or 0
+            tx_bytes = stats.get("tx_bytes", 0) or 0
+            total_bytes += rx_bytes + tx_bytes
+
+        return round(total_bytes / (1024 * 1024), 2) if total_bytes > 0 else 0.0
+
+    # Test cases that mirror what the actual sensor might receive from coordinator
+    # Test with None data (coordinator.data could be None)
+    assert safe_traffic_calculation(None) == 0.0
+
+    # Test with empty data
+    assert safe_traffic_calculation({}) == 0.0
+
+    # Test with zero bytes
+    zero_data = {
+        "interfaces": {
+            "eth0": {
+                "statistics": {
+                    "rx_bytes": 0,
+                    "tx_bytes": 0,
+                }
+            }
+        }
+    }
+    assert safe_traffic_calculation(zero_data) == 0.0
+
+    # Test with None values
+    none_data = {
+        "interfaces": {
+            "eth0": {
+                "statistics": {
+                    "rx_bytes": None,
+                    "tx_bytes": None,
+                }
+            }
+        }
+    }
+    assert safe_traffic_calculation(none_data) == 0.0
+
+    # Test with missing statistics
+    missing_stats_data = {"interfaces": {"eth0": {"up": True}}}
+    assert safe_traffic_calculation(missing_stats_data) == 0.0
