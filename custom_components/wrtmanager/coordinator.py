@@ -250,6 +250,16 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         self._dhcp_routers: Set[str] = set()  # Track which routers actually serve DHCP
         self._tried_dhcp: Set[str] = set()  # Track which routers we've already tested
 
+        # Router failure tracking for graceful degradation
+        self._failed_routers: Dict[str, Dict[str, Any]] = (
+            {}
+        )  # Track failed routers with timestamps and error details
+        self._consecutive_failures: Dict[str, int] = {}  # Track consecutive failures per router
+        self._extended_failure_threshold = timedelta(
+            minutes=30
+        )  # Consider router truly failed after 30 minutes
+        self._max_consecutive_failures = 5  # Mark router as failed after 5 consecutive failures
+
         # Compile regex patterns once for performance optimization
         self._vlan_pattern: Pattern[str] = re.compile(r"vlan(\d+)")
 
@@ -257,25 +267,58 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         """Fetch data from all routers."""
         _LOGGER.debug("Starting data update for %d routers", len(self.routers))
 
-        # Authenticate with all routers in parallel
-        auth_tasks = [
-            self._authenticate_router(host, client) for host, client in self.routers.items()
-        ]
+        # Authenticate with all routers in parallel, but skip permanently failed ones
+        auth_tasks = []
+        eligible_hosts = []
+        for host, client in self.routers.items():
+            # Skip routers that are permanently failed due to too many consecutive failures
+            # But periodically retry them (every ~1 hour) to check if they've recovered
+            if host in self._failed_routers and self._failed_routers[host].get(
+                "is_permanently_failed", False
+            ):
+                # Allow retry if it's been more than 1 hour since last failure
+                last_failure = self._failed_routers[host]["last_failure"]
+                if (datetime.now() - last_failure) < timedelta(hours=1):
+                    _LOGGER.debug(
+                        "Skipping authentication for permanently failed router %s "
+                        "(will retry after 1 hour)",
+                        host,
+                    )
+                    continue
+                else:
+                    _LOGGER.info(
+                        "Retrying permanently failed router %s after 1 hour cooldown", host
+                    )
+                    # Reset permanently failed flag for fresh attempt
+                    self._failed_routers[host]["is_permanently_failed"] = False
+            auth_tasks.append(self._authenticate_router(host, client))
+            eligible_hosts.append(host)
 
         auth_results = await asyncio.gather(*auth_tasks, return_exceptions=True)
 
-        # Process authentication results
+        # Process authentication results with graceful degradation
         successful_auths = 0
-        for i, (host, result) in enumerate(zip(self.routers.keys(), auth_results)):
+        for host, result in zip(eligible_hosts, auth_results):
             if isinstance(result, Exception):
-                _LOGGER.error("Authentication failed for %s: %s", host, result)
+                self._handle_router_failure(host, result, "authentication")
                 self.sessions.pop(host, None)
             else:
+                self._handle_router_success(host)
                 self.sessions[host] = result
                 successful_auths += 1
 
+        # Check if we should continue with partial operation or fail completely
         if successful_auths == 0:
-            raise UpdateFailed("Failed to authenticate with any router")
+            if self._should_fail_completely():
+                raise UpdateFailed("Failed to authenticate with any router")
+            else:
+                _LOGGER.warning(
+                    "No routers currently available, but continuing with graceful degradation. "
+                    "Failed routers: %s",
+                    list(self._failed_routers.keys()),
+                )
+                # Return empty data rather than failing completely
+                return self._create_update_data_response(graceful_degradation=True)
 
         # Collect data from all authenticated routers
         _LOGGER.debug(
@@ -297,11 +340,13 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         system_info: Dict[str, Any] = {}
         interfaces: Dict[str, Any] = {}
 
-        for i, (host, result) in enumerate(zip(self.sessions.keys(), router_data_results)):
+        for host, result in zip(self.sessions.keys(), router_data_results):
             if isinstance(result, Exception):
-                _LOGGER.error("Data collection failed for %s: %s", host, result)
+                self._handle_router_failure(host, result, "data_collection")
                 continue
 
+            # Mark this router as successful for data collection
+            self._handle_router_success(host)
             wifi_devices, router_dhcp_data, router_system_data, router_interface_data = result
             all_devices.extend(wifi_devices)
 
@@ -363,15 +408,14 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         ssid_data = self._extract_ssid_data(interfaces)
         _LOGGER.debug("Extracted SSID data: %s", ssid_data)
 
-        return {
-            "devices": enriched_devices,
-            "system_info": system_info,
-            "interfaces": interfaces,
-            "ssids": ssid_data,
-            "routers": list(self.sessions.keys()),
-            "last_update": datetime.now(),
-            "total_devices": len(enriched_devices),
-        }
+        return self._create_update_data_response(
+            devices=enriched_devices,
+            system_info=system_info,
+            interfaces=interfaces,
+            ssids=ssid_data,
+            routers=list(self.sessions.keys()),
+            graceful_degradation=len(self._failed_routers) > 0,
+        )
 
     async def _authenticate_router(self, host: str, client: UbusClient) -> str:
         """Authenticate with a single router with retry logic."""
@@ -893,3 +937,221 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             else:
                 bands.append("Unknown")
         return bands
+
+    def _handle_router_failure(self, host: str, error: Exception, operation: str) -> None:
+        """Handle router failure with tracking for graceful degradation."""
+        current_time = datetime.now()
+
+        # Increment consecutive failures
+        self._consecutive_failures[host] = self._consecutive_failures.get(host, 0) + 1
+
+        # Log the failure with appropriate level based on consecutive failures
+        consecutive_failures = self._consecutive_failures.get(host, 0)
+        if consecutive_failures <= 3:
+            _LOGGER.warning(
+                "Router %s failed during %s (attempt %d): %s",
+                host,
+                operation,
+                consecutive_failures,
+                error,
+            )
+        else:
+            _LOGGER.error(
+                "Router %s repeatedly failing during %s (failure %d): %s",
+                host,
+                operation,
+                consecutive_failures,
+                error,
+            )
+
+        # Track failure details
+        # If router was not in _failed_routers before this call, it means it had recovered
+        # or this is the first failure - reset first_failure to current_time
+        if host not in self._failed_routers:
+            first_failure_time = current_time
+            _LOGGER.debug(
+                "Router %s - first failure or recovered, resetting failure timestamp", host
+            )
+        else:
+            # Router was already in failed state, preserve original failure time
+            first_failure_time = self._failed_routers[host].get("first_failure", current_time)
+            _LOGGER.debug(
+                "Router %s - continuing failure sequence from %s",
+                host,
+                first_failure_time.isoformat(),
+            )
+
+        self._failed_routers[host] = {
+            "first_failure": first_failure_time,
+            "last_failure": current_time,
+            "consecutive_failures": self._consecutive_failures.get(host, 0),
+            "last_error": str(error),
+            "last_operation": operation,
+            "is_extended_failure": (
+                self._failed_routers[host].get("is_extended_failure", False)
+                if host in self._failed_routers
+                else False
+            ),
+            "is_permanently_failed": (
+                self._failed_routers[host].get("is_permanently_failed", False)
+                if host in self._failed_routers
+                else False
+            ),
+        }
+
+        # Check if this is now an extended failure
+        first_failure_time = self._failed_routers[host]["first_failure"]
+        if current_time - first_failure_time >= self._extended_failure_threshold:
+            if not self._failed_routers[host]["is_extended_failure"]:
+                _LOGGER.error(
+                    "Router %s has been failing for over %s minutes - marking as extended failure",
+                    host,
+                    self._extended_failure_threshold.total_seconds() / 60,
+                )
+                self._failed_routers[host]["is_extended_failure"] = True
+
+        # Check if router exceeded maximum consecutive failures threshold
+        if self._consecutive_failures.get(host, 0) >= self._max_consecutive_failures:
+            if not self._failed_routers[host].get("is_permanently_failed", False):
+                _LOGGER.error(
+                    "Router %s exceeded %d consecutive failures - marking as permanently failed",
+                    host,
+                    self._max_consecutive_failures,
+                )
+                self._failed_routers[host]["is_permanently_failed"] = True
+
+    def _handle_router_success(self, host: str) -> None:
+        """Handle router success - clear failure tracking."""
+        if host in self._failed_routers:
+            # Router recovered from failure
+            failure_duration = datetime.now() - self._failed_routers[host]["first_failure"]
+            _LOGGER.info(
+                "Router %s recovered after %d consecutive failures over %s",
+                host,
+                self._consecutive_failures.get(host, 0),
+                failure_duration,
+            )
+
+            # Clear failure tracking
+            self._failed_routers.pop(host, None)
+            self._consecutive_failures.pop(host, None)
+
+    def _should_fail_completely(self) -> bool:
+        """Determine if integration should fail completely or continue with graceful degradation."""
+        # If we have no routers configured, we must fail
+        if not self.routers:
+            return True
+
+        # Count routers in different failure states
+        total_routers = len(self.routers)
+        extended_failures = 0
+
+        for host, failure_info in self._failed_routers.items():
+            if failure_info["is_extended_failure"]:
+                extended_failures += 1
+
+        # If all routers are in extended failure state, we should fail completely
+        if extended_failures >= total_routers:
+            _LOGGER.error(
+                "All %d routers have been in extended failure state - integration must fail",
+                total_routers,
+            )
+            return True
+
+        # If all routers are failing (but not all extended), continue with graceful degradation
+        if len(self._failed_routers) >= total_routers:
+            _LOGGER.warning(
+                "All routers currently failing but not all in extended failure - "
+                "continuing with graceful degradation"
+            )
+            return False
+
+        # If we have at least one working router, continue normally
+        return False
+
+    def _create_failed_router_status(self, host: str, current_time: datetime) -> Dict[str, Any]:
+        """Create status dictionary for a failed router."""
+        failure_info = self._failed_routers[host]
+        return {
+            "status": "failed",
+            "is_extended_failure": failure_info["is_extended_failure"],
+            "consecutive_failures": failure_info["consecutive_failures"],
+            "first_failure": failure_info["first_failure"].isoformat(),
+            "last_failure": failure_info["last_failure"].isoformat(),
+            "failure_duration_minutes": (
+                current_time - failure_info["first_failure"]
+            ).total_seconds()
+            / 60,
+            "last_error": failure_info["last_error"],
+            "last_operation": failure_info["last_operation"],
+        }
+
+    def _create_healthy_router_status(self, host: str) -> Dict[str, Any]:
+        """Create status dictionary for a healthy router."""
+        return {
+            "status": "healthy",
+            "is_authenticated": host in self.sessions,
+            "session_id": self.sessions.get(host, "N/A"),
+        }
+
+    def _create_update_data_response(
+        self,
+        devices: List[Dict[str, Any]] = None,
+        system_info: Dict[str, Any] = None,
+        interfaces: Dict[str, Any] = None,
+        ssids: Dict[str, Any] = None,
+        routers: List[str] = None,
+        graceful_degradation: bool = False,
+    ) -> Dict[str, Any]:
+        """Create standardized data update response dictionary."""
+        if devices is None:
+            devices = []
+        if system_info is None:
+            system_info = {}
+        if interfaces is None:
+            interfaces = {}
+        if ssids is None:
+            ssids = {}
+        if routers is None:
+            routers = []
+
+        return {
+            "devices": devices,
+            "system_info": system_info,
+            "interfaces": interfaces,
+            "ssids": ssids,
+            "routers": routers,
+            "last_update": datetime.now(),
+            "total_devices": len(devices),
+            "failed_routers": list(self._failed_routers.keys()),
+            "graceful_degradation": graceful_degradation,
+        }
+
+    def get_router_status(self) -> Dict[str, Any]:
+        """Get detailed status of all routers for diagnostics or monitoring.
+
+        Returns:
+            Dict[str, Any]: A dictionary mapping each router host to its status information.
+                - For failed routers: includes status ("failed"), extended failure flag,
+                  consecutive failures, first and last failure timestamps, failure duration
+                  in minutes, last error, and last operation.
+                - For healthy routers: includes status ("healthy"), authentication state,
+                  and session ID.
+
+        Usage:
+            Call this method to retrieve the current health and diagnostic status of all
+            managed routers. Useful for diagnostics panels, logging, or external monitoring
+            tools.
+        """
+        current_time = datetime.now()
+        router_status = {}
+
+        for host in self.routers.keys():
+            if host in self._failed_routers:
+                status = self._create_failed_router_status(host, current_time)
+            else:
+                status = self._create_healthy_router_status(host)
+
+            router_status[host] = status
+
+        return router_status
