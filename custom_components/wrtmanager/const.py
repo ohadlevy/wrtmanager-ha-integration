@@ -42,6 +42,11 @@ ATTR_LAST_SEEN = "last_seen"
 ATTR_DATA_SOURCE = "data_source"
 ATTR_ROAMING_COUNT = "roaming_count"
 ATTR_PRIMARY_AP = "primary_ap"
+ATTR_CONNECTION_TYPE = "connection_type"
+
+# Connection types
+CONNECTION_TYPE_WIFI = "wifi"
+CONNECTION_TYPE_WIRED = "wired"
 
 # SSID-related attributes
 ATTR_SSID_NAME = "ssid_name"

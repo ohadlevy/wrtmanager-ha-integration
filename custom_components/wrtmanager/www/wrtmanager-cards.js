@@ -180,6 +180,7 @@ const WrtManagerMixin = (superClass) =>
           network: a.network || "-",
           vendor: a.vendor || "",
           deviceType: a.device_type || "Unknown",
+          connectionType: a.connection_type || "wifi",
           mac,
           roaming: a.roaming_count != null ? Number(a.roaming_count) : 0,
           online: state.state === "on",
