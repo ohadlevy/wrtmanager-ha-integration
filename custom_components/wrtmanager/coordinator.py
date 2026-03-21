@@ -675,6 +675,46 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 return device
         return None
 
+    async def disconnect_client(self, router_host: str, interface: str, mac_address: str) -> bool:
+        """Disconnect a WiFi client from a specific router/interface.
+
+        Args:
+            router_host: The router host to disconnect from.
+            interface: Wireless interface name (e.g. "phy0-ap0").
+            mac_address: MAC address of the client.
+
+        Returns:
+            True if successful, False otherwise.
+
+        Raises:
+            ValueError: If the router is not configured or not authenticated.
+        """
+        client = self.routers.get(router_host)
+        if not client:
+            raise ValueError(f"Router {router_host} is not configured")
+
+        session_id = self.sessions.get(router_host)
+        if not session_id:
+            raise ValueError(f"Router {router_host} is not authenticated")
+
+        _LOGGER.info(
+            "Disconnecting client %s from %s (interface: %s)",
+            mac_address,
+            router_host,
+            interface,
+        )
+
+        success = await client.disconnect_client(session_id, interface, mac_address)
+
+        if success:
+            _LOGGER.info("Successfully disconnected %s from %s", mac_address, router_host)
+            # Trigger a data refresh to update entity states
+            await self.async_request_refresh()
+        else:
+            _LOGGER.warning("Failed to disconnect %s from %s", mac_address, router_host)
+
+        return success
+
     def get_devices_by_router(self, router: str) -> List[Dict[str, Any]]:
         """Get all devices connected to a specific router."""
         if not self.data or "devices" not in self.data:
