@@ -12,7 +12,6 @@ CONF_ROUTER_PASSWORD = "password"  # nosec B105
 CONF_ROUTER_DESCRIPTION = "description"
 CONF_ROUTER_USE_HTTPS = "use_https"
 CONF_ROUTER_VERIFY_SSL = "verify_ssl"
-CONF_VLAN_NAMES = "vlan_names"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 # Default values
@@ -36,7 +35,7 @@ ATTR_DEVICE_TYPE = "device_type"
 ATTR_SIGNAL_DBM = "signal_dbm"
 ATTR_ROUTER = "router"
 ATTR_INTERFACE = "interface"
-ATTR_VLAN_ID = "vlan_id"
+ATTR_NETWORK_NAME = "network_name"
 ATTR_SSID = "ssid"
 ATTR_CONNECTED = "connected"
 ATTR_LAST_SEEN = "last_seen"
@@ -58,21 +57,6 @@ ATTR_NETWORK_INTERFACE = "network_interface"
 # Entity types
 ENTITY_TYPE_DEVICE_PRESENCE = "device_presence"
 ENTITY_TYPE_SIGNAL_STRENGTH = "signal_strength"
-
-# VLAN mapping
-VLAN_MAIN = 1
-VLAN_IOT = 3
-VLAN_GUEST = 13
-
-VLAN_NAMES = {
-    1: "Main Network",
-    2: "Management Network",
-    3: "IoT Network",
-    10: "Secondary Network",
-    20: "Work Network",
-    100: "Guest Network",
-    # Add your custom VLANs here
-}
 
 # Device types
 DEVICE_TYPE_IOT_SWITCH = "IoT Switch"

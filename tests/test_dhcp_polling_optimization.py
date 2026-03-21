@@ -89,7 +89,7 @@ class MockCoordinator(WrtManagerCoordinator):
                         }
         return dhcp_devices
 
-    def _correlate_device_data(self, wifi_devices, dhcp_data):
+    def _correlate_device_data(self, wifi_devices, dhcp_data, interface_network_map=None):
         """Mock device correlation for tests."""
         return wifi_devices
 

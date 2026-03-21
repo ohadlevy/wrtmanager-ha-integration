@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Pattern, Set
+from typing import Any, Dict, List, Optional, Set
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
@@ -22,12 +21,12 @@ from .const import (
     ATTR_IP,
     ATTR_LAST_SEEN,
     ATTR_MAC,
+    ATTR_NETWORK_NAME,
     ATTR_PRIMARY_AP,
     ATTR_ROAMING_COUNT,
     ATTR_ROUTER,
     ATTR_SIGNAL_DBM,
     ATTR_VENDOR,
-    ATTR_VLAN_ID,
     CONF_ROUTER_USE_HTTPS,
     CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
@@ -82,9 +81,6 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         # DHCP router tracking for optimization
         self._dhcp_routers: Set[str] = set()  # Track which routers actually serve DHCP
         self._tried_dhcp: Set[str] = set()  # Track which routers we've already tested
-
-        # Compile regex patterns once for performance optimization
-        self._vlan_pattern: Pattern[str] = re.compile(r"vlan(\d+)")
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from all routers."""
@@ -180,8 +176,13 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     _LOGGER.warning("Fallback DHCP query failed for %s: %s", fallback_host, ex)
                     self._tried_dhcp.add(fallback_host)
 
+        # Build interface-to-network mapping from wireless status data
+        interface_network_map = self._build_interface_network_map(interfaces)
+
         # Correlate and enrich device data
-        enriched_devices = self._correlate_device_data(all_devices, dhcp_data)
+        enriched_devices = self._correlate_device_data(
+            all_devices, dhcp_data, interface_network_map
+        )
 
         # Update roaming detection
         self._update_roaming_detection(enriched_devices)
@@ -403,7 +404,10 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         return dhcp_devices
 
     def _correlate_device_data(
-        self, wifi_devices: List[Dict[str, Any]], dhcp_data: Dict[str, Any]
+        self,
+        wifi_devices: List[Dict[str, Any]],
+        dhcp_data: Dict[str, Any],
+        interface_network_map: Optional[Dict[str, str]] = None,
     ) -> List[Dict[str, Any]]:
         """Correlate WiFi devices with DHCP data and enrich with additional info."""
         enriched_devices = []
@@ -423,64 +427,59 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 device[ATTR_VENDOR] = device_info.get("vendor")
                 device[ATTR_DEVICE_TYPE] = device_info.get("device_type")
 
-            # Determine VLAN based on IP address or interface
-            device[ATTR_VLAN_ID] = self._determine_vlan(device)
+            # Look up OpenWrt network name from wireless status data
+            if interface_network_map:
+                router = device.get(ATTR_ROUTER, "")
+                interface = device.get(ATTR_INTERFACE, "")
+                map_key = f"{router}:{interface}"
+                device[ATTR_NETWORK_NAME] = interface_network_map.get(map_key)
 
             enriched_devices.append(device)
 
         return enriched_devices
 
-    def _determine_vlan(self, device: Dict[str, Any]) -> int:
-        """Determine VLAN ID from device information."""
-        interface = device.get(ATTR_INTERFACE, "")
+    @staticmethod
+    def _build_interface_network_map(
+        interfaces: Dict[str, Any],
+    ) -> Dict[str, str]:
+        """Build a mapping from (router:interface) to OpenWrt network name.
 
-        # Try to determine VLAN from WiFi interface name patterns
-        if interface:
-            # Common OpenWrt VLAN interface naming patterns
-            interface_lower = interface.lower()
+        Extracts network assignments from wireless status data which contains
+        the actual OpenWrt network configuration for each wireless interface.
 
-            # Check for explicit VLAN tags in interface names
-            if "vlan" in interface_lower:
-                # Extract VLAN ID from names like "wlan0-vlan3", "phy0-ap1-vlan13"
-                vlan_match = re.search(r"vlan(\d+)", interface_lower)
-                if vlan_match:
-                    return int(vlan_match.group(1))
+        Returns:
+            Dict mapping "router_host:interface_name" to network name string.
+        """
+        network_map: Dict[str, str] = {}
 
-            # Check for common naming patterns (generic, not network-specific)
-            if any(keyword in interface_lower for keyword in ["iot", "smart", "things"]):
-                return 3  # Common IoT VLAN
-            elif any(keyword in interface_lower for keyword in ["guest", "visitor", "public"]):
-                return 100  # Common Guest VLAN
-            elif any(keyword in interface_lower for keyword in ["main", "default", "lan"]):
-                return 1  # Main VLAN
+        for router_host, router_interfaces in interfaces.items():
+            for interface_name, interface_data in router_interfaces.items():
+                # Only process wireless radio data (has 'interfaces' key)
+                if not isinstance(interface_data, dict) or "interfaces" not in interface_data:
+                    continue
 
-            # Check for multi-AP interface patterns (ap0=main, ap1=secondary, ap2=guest)
-            elif "ap1" in interface_lower:
-                return 10  # Secondary network
-            elif "ap2" in interface_lower:
-                return 100  # Guest network
-            elif "ap0" in interface_lower:
-                return 1  # Main network
+                radio_interfaces = interface_data.get("interfaces", [])
+                if not isinstance(radio_interfaces, list):
+                    continue
 
-        # For devices with IP addresses, try to infer from common subnet patterns
-        ip = device.get(ATTR_IP)
-        if ip:
-            # Common patterns - these are generic enough for most networks
-            ip_parts = ip.split(".")
-            if len(ip_parts) >= 3:
-                third_octet = ip_parts[2]
-                # Many networks use the third octet to indicate VLAN
-                try:
-                    vlan_candidate = int(third_octet)
-                    # Only return as VLAN if it's a reasonable VLAN ID (1-4094)
-                    if 1 <= vlan_candidate <= 4094:
-                        return vlan_candidate
-                except ValueError:
-                    # If the third octet is not an integer, we cannot infer a VLAN ID from it.
-                    # This is expected for some devices; default VLAN will be used below.
-                    pass
+                for iface in radio_interfaces:
+                    ifname = iface.get("ifname")
+                    config = iface.get("config", {})
+                    network = config.get("network")
 
-        return 1  # Default to main VLAN
+                    if ifname and network:
+                        # network can be a list (e.g. ['lan']) or string
+                        if isinstance(network, list):
+                            net_name = network[0] if network else None
+                        else:
+                            net_name = network
+
+                        if net_name:
+                            map_key = f"{router_host}:{ifname}"
+                            network_map[map_key] = net_name
+
+        _LOGGER.debug("Interface-to-network map: %s", network_map)
+        return network_map
 
     def _update_roaming_detection(self, devices: List[Dict[str, Any]]) -> None:
         """Update roaming detection for devices."""

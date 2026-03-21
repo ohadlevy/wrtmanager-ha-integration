@@ -23,15 +23,13 @@ from .const import (
     ATTR_HOSTNAME,
     ATTR_IP,
     ATTR_MAC,
+    ATTR_NETWORK_NAME,
     ATTR_PRIMARY_AP,
     ATTR_ROAMING_COUNT,
     ATTR_ROUTER,
     ATTR_SIGNAL_DBM,
     ATTR_VENDOR,
-    ATTR_VLAN_ID,
-    CONF_VLAN_NAMES,
     DOMAIN,
-    VLAN_NAMES,
     classify_signal_quality,
 )
 from .coordinator import WrtManagerCoordinator
@@ -697,15 +695,10 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
         if primary_ap:
             attributes["primary_ap"] = primary_ap
 
-        # Add VLAN information
-        vlan_id = device_data.get(ATTR_VLAN_ID)
-        if vlan_id:
-            attributes["vlan_id"] = vlan_id
-            # Get custom VLAN names from config entry options
-            custom_vlan_names = self._config_entry.options.get(CONF_VLAN_NAMES, {})
-            # Merge custom names with defaults
-            vlan_names = {**VLAN_NAMES, **custom_vlan_names}
-            attributes["vlan_name"] = vlan_names.get(vlan_id, f"VLAN {vlan_id}")
+        # Add network information from OpenWrt
+        network_name = device_data.get(ATTR_NETWORK_NAME)
+        if network_name:
+            attributes["network"] = network_name
 
         # Add signal quality description
         signal = device_data.get(ATTR_SIGNAL_DBM)

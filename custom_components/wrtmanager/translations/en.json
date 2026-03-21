@@ -66,19 +66,6 @@
           "action": "Configuration Option"
         }
       },
-      "vlan_names": {
-        "title": "Customize VLAN Names",
-        "description": "{description}",
-        "data": {
-          "vlan_1": "VLAN 1 Name",
-          "vlan_2": "VLAN 2 Name",
-          "vlan_3": "VLAN 3 Name",
-          "vlan_10": "VLAN 10 Name",
-          "vlan_13": "VLAN 13 Name",
-          "vlan_20": "VLAN 20 Name",
-          "vlan_100": "VLAN 100 Name"
-        }
-      },
       "select_router": {
         "title": "Select Router",
         "description": "{description}",

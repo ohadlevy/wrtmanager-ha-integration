@@ -40,13 +40,11 @@ from .const import (
     ATTR_HOSTNAME,
     ATTR_INTERFACE,
     ATTR_MAC,
+    ATTR_NETWORK_NAME,
     ATTR_ROUTER,
     ATTR_SIGNAL_DBM,
-    ATTR_VLAN_ID,
     CONF_ROUTERS,
-    CONF_VLAN_NAMES,
     DOMAIN,
-    VLAN_NAMES,
     classify_signal_quality,
 )
 from .coordinator import WrtManagerCoordinator
@@ -429,46 +427,40 @@ class WrtManagerDeviceCountSensor(WrtManagerSensorBase):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return device breakdown by VLAN."""
+        """Return device breakdown by network and device type."""
         router_devices = self._get_router_devices()
         if not router_devices:
             return {}
 
-        # Get custom VLAN names from config entry options
-        custom_vlan_names = self._config_entry.options.get(CONF_VLAN_NAMES, {})
-        # Merge custom names with defaults
-        vlan_names = {**VLAN_NAMES, **custom_vlan_names}
-
-        # Count devices by VLAN and device type
-        vlan_counts = {}
+        # Count devices by network and device type
+        network_counts = {}
         device_type_counts = {}
 
         for device in router_devices:
-            # Count by VLAN
-            vlan_id = device.get(ATTR_VLAN_ID, 1)
-            vlan_name = vlan_names.get(vlan_id, f"VLAN {vlan_id}")
-            vlan_key = vlan_name.lower().replace(" ", "_").replace("-", "_")
-            vlan_counts[vlan_key] = vlan_counts.get(vlan_key, 0) + 1
+            # Count by OpenWrt network name
+            network_name = device.get(ATTR_NETWORK_NAME)
+            if network_name:
+                net_key = network_name.lower().replace(" ", "_").replace("-", "_")
+                network_counts[net_key] = network_counts.get(net_key, 0) + 1
 
             # Count by device type for categorization
             device_type = device.get(ATTR_DEVICE_TYPE, "Unknown Device")
             type_key = device_type.lower().replace(" ", "_").replace("-", "_")
             device_type_counts[type_key] = device_type_counts.get(type_key, 0) + 1
 
-        # Create dynamic attributes based on actual VLANs and device types found
         attributes = {}
 
-        # Add VLAN breakdown
-        for vlan_key, count in vlan_counts.items():
-            attributes[f"{vlan_key}_devices"] = count
+        # Add network breakdown
+        for net_key, count in network_counts.items():
+            attributes[f"{net_key}_devices"] = count
 
         # Add device type categorization breakdown
         for type_key, count in device_type_counts.items():
             attributes[f"{type_key}_count"] = count
 
-        # Add total if we have multiple VLANs
-        if len(vlan_counts) > 1:
-            attributes["total_devices"] = sum(vlan_counts.values())
+        # Add total if we have multiple networks
+        if len(network_counts) > 1:
+            attributes["total_devices"] = sum(network_counts.values())
 
         return attributes
 
@@ -527,14 +519,8 @@ class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
         if not interface_devices:
             return {}
 
-        # Get custom VLAN names from config entry options
-        custom_vlan_names = self._config_entry.options.get(CONF_VLAN_NAMES, {})
-        # Merge custom names with defaults
-        vlan_names = {**VLAN_NAMES, **custom_vlan_names}
-
         # Analyze devices connected to this interface
         signal_readings = []
-        vlan_counts = {}
         device_type_counts = {}
 
         for device in interface_devices:
@@ -543,15 +529,8 @@ class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
             if signal is not None:
                 signal_readings.append(signal)
 
-            # Count by VLAN
-            vlan_id = device.get(ATTR_VLAN_ID, 1)
-            vlan_name = vlan_names.get(vlan_id, f"VLAN {vlan_id}")
-            vlan_key = vlan_name.lower().replace(" ", "_").replace("-", "_")
-            vlan_counts[vlan_key] = vlan_counts.get(vlan_key, 0) + 1
-
             # Count by device type for categorization
             device_type = device.get(ATTR_DEVICE_TYPE, "Unknown Device")
-            # Create a clean key for device type counting
             type_key = device_type.lower().replace(" ", "_").replace("-", "_")
             device_type_counts[type_key] = device_type_counts.get(type_key, 0) + 1
 
@@ -560,12 +539,6 @@ class WrtManagerInterfaceDeviceCountSensor(WrtManagerSensorBase):
             "router": self._router_name,
             "total_devices": len(interface_devices),
         }
-
-        # Add VLAN breakdown if devices exist
-        if vlan_counts:
-            attributes.update(
-                {f"{vlan_key}_devices": count for vlan_key, count in vlan_counts.items()}
-            )
 
         # Add device type categorization breakdown
         if device_type_counts:

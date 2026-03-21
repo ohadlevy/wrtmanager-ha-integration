@@ -48,7 +48,7 @@ def mock_coordinator_data():
                 "ip": "192.168.1.100",
                 "vendor": "Apple",
                 "device_type": "Mobile Device",
-                "vlan_id": 1,
+                "network_name": "lan",
             }
         ],
         "system_info": {

@@ -154,7 +154,7 @@ async def test_scan_interval_preserves_existing_options():
                 }
             ]
         },
-        options={CONF_SCAN_INTERVAL: 60, "vlan_names": {1: "Main Network", 2: "Guest Network"}},
+        options={CONF_SCAN_INTERVAL: 60, "some_other_option": "test_value"},
         entry_id="test_entry",
     )
 
@@ -166,7 +166,7 @@ async def test_scan_interval_preserves_existing_options():
     assert result["type"] == "create_entry"
     assert result["data"][CONF_SCAN_INTERVAL] == 90
     # Verify other options are preserved
-    assert result["data"]["vlan_names"] == {1: "Main Network", 2: "Guest Network"}
+    assert result["data"]["some_other_option"] == "test_value"
 
 
 @pytest.mark.asyncio
