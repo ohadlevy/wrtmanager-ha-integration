@@ -79,15 +79,18 @@ const WrtManagerMixin = (superClass) =>
     findDeviceByMac(mac) {
       if (!mac || mac === "-" || !this.hass?.devices) return null;
       const macUpper = mac.toUpperCase();
+      let fallback = null;
       for (const device of Object.values(this.hass.devices)) {
         if (!device.connections) continue;
         for (const [type, value] of device.connections) {
           if (type === "mac" && value.toUpperCase() === macUpper) {
-            return device;
+            // Prefer the device that has wrtmanager identifiers
+            if (device.identifiers?.some(([d]) => d === "wrtmanager")) return device;
+            if (!fallback) fallback = device;
           }
         }
       }
-      return null;
+      return fallback;
     }
 
     findRouterDevice(routerIp) {
