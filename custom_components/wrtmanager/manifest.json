@@ -7,7 +7,7 @@
     "@ohadlevy"
   ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["frontend", "http", "lovelace"],
   "requirements": [],
   "ssdp": [],
   "zeroconf": [],

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import timedelta
+from pathlib import Path
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -12,6 +15,13 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN
 from .coordinator import WrtManagerCoordinator
+
+_INTEGRATION_DIR = Path(__file__).parent
+_MANIFEST = json.loads((_INTEGRATION_DIR / "manifest.json").read_text())
+CARDS_VERSION = _MANIFEST["version"]
+CARDS_URL = f"/{DOMAIN}/wrtmanager-cards.js"
+CARDS_RESOURCE_URL = f"{CARDS_URL}?v={CARDS_VERSION}"
+CARDS_PATH = _INTEGRATION_DIR / "www" / "wrtmanager-cards.js"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +69,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Listen for options updates
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
+    # Register custom Lovelace cards (only once across all config entries)
+    if not hass.data.get(f"{DOMAIN}_cards_registered"):
+        try:
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(CARDS_URL, str(CARDS_PATH), cache_headers=False)]
+            )
+            hass.data[f"{DOMAIN}_cards_registered"] = True
+
+            resources = hass.data["lovelace"].resources
+            if not any(r.get("url", "").startswith(CARDS_URL) for r in resources.async_items()):
+                await resources.async_create_item({"res_type": "module", "url": CARDS_RESOURCE_URL})
+                _LOGGER.info("Registered WrtManager Lovelace cards v%s", CARDS_VERSION)
+        except Exception:
+            _LOGGER.info(
+                "Could not auto-register Lovelace cards. "
+                "Add '%s' as a JS module resource manually.",
+                CARDS_URL,
+            )
 
     # Forward the setup to the sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
