@@ -13,6 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceEntry, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -55,17 +56,63 @@ async def async_setup_entry(
 
     entities = []
 
+    # Migrate old-format presence entity unique IDs to MAC-only format
+    entity_registry = er.async_get(hass)
+    migrated = 0
+    for entity in list(entity_registry.entities.values()):
+        if entity.platform != DOMAIN or not entity.unique_id.endswith("_presence"):
+            continue
+        # Old formats: wrtmanager_{router_ip}_{mac}_presence or wrtmanager_unknown_{mac}_presence
+        # New format: wrtmanager_{mac}_presence
+        parts = entity.unique_id.split("_")
+        if (
+            len(parts) > 8
+        ):  # Has router IP or "unknown" prefix beyond wrtmanager + 6 mac parts + presence
+            # Extract MAC from the end: last 7 parts are xx_xx_xx_xx_xx_xx_presence
+            mac_parts = parts[-7:-1]  # 6 hex pairs
+            new_unique_id = f"{DOMAIN}_{'_'.join(mac_parts)}_presence"
+            # Only migrate if the new unique ID isn't already taken
+            if not entity_registry.async_get_entity_id("binary_sensor", DOMAIN, new_unique_id):
+                entity_registry.async_update_entity(entity.entity_id, new_unique_id=new_unique_id)
+                migrated += 1
+            else:
+                # New format already exists, remove the old duplicate
+                entity_registry.async_remove(entity.entity_id)
+                migrated += 1
+    if migrated:
+        _LOGGER.info("Migrated %d presence sensors to MAC-only unique IDs", migrated)
+
     # Debug logging for available data
     _LOGGER.debug(
         "Binary sensor setup - coordinator data keys: %s",
         list(coordinator.data.keys()) if coordinator.data else "None",
     )
 
-    # Create binary sensors for device presence
+    # Create binary sensors for device presence (with dynamic updates)
+    created_macs: set[str] = set()
+
     for device in coordinator.data.get("devices", []):
         mac = device.get(ATTR_MAC)
-        if mac:
+        if mac and mac.upper() not in created_macs:
+            created_macs.add(mac.upper())
             entities.append(WrtDevicePresenceSensor(coordinator, mac, config_entry))
+
+    @callback
+    def _async_add_new_presence_sensors() -> None:
+        """Add presence sensors for newly discovered devices."""
+        if not coordinator.data or "devices" not in coordinator.data:
+            return
+        new_entities = []
+        for device in coordinator.data["devices"]:
+            mac = device.get(ATTR_MAC)
+            if mac and mac.upper() not in created_macs:
+                created_macs.add(mac.upper())
+                new_entities.append(WrtDevicePresenceSensor(coordinator, mac, config_entry))
+        if new_entities:
+            async_add_entities(new_entities)
+            _LOGGER.debug("Added %d new presence sensors", len(new_entities))
+
+    config_entry.async_on_unload(coordinator.async_add_listener(_async_add_new_presence_sensors))
 
     # Create interface status binary sensors
     if coordinator.data and "interfaces" in coordinator.data:
@@ -641,16 +688,17 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
         super().__init__(coordinator)
         self._mac = mac.upper()
         self._config_entry = config_entry
-        self._router_host = config_entry.data.get("host")
 
         # Get device info for initial setup
         device_data = self._get_device_data()
         device_name = self._get_device_name(device_data)
 
-        # Include router host in unique ID to avoid conflicts when same
-        # device connects to different routers
-        router_id = self._router_host.replace(".", "_") if self._router_host else "unknown"
-        self._attr_unique_id = f"{DOMAIN}_{router_id}_{mac.lower().replace(':', '_')}_presence"
+        # Get router host from device data for device_info grouping
+        self._router_host = device_data.get(ATTR_ROUTER) if device_data else None
+
+        # Use MAC-only unique ID — one presence sensor per device.
+        # Roaming is tracked via the primary_ap attribute, not separate entities.
+        self._attr_unique_id = f"{DOMAIN}_{mac.lower().replace(':', '_')}_presence"
         self._attr_name = f"{device_name} Presence"
         self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
 

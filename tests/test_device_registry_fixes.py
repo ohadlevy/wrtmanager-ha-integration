@@ -39,8 +39,8 @@ def mock_config_entry():
 class TestDeviceRegistryFixes:
     """Test device registry via_device fixes."""
 
-    def test_unique_id_includes_router_host(self, mock_coordinator, mock_config_entry):
-        """Test that unique IDs include router host to prevent collisions."""
+    def test_unique_id_uses_mac_only(self, mock_coordinator, mock_config_entry):
+        """Test that unique IDs use MAC only — one sensor per device."""
         with patch("custom_components.wrtmanager.binary_sensor.dr"):
             mock_hass = Mock()
 
@@ -51,12 +51,11 @@ class TestDeviceRegistryFixes:
             )
             sensor.hass = mock_hass
 
-            # Check that unique ID includes router host
-            expected_unique_id = "wrtmanager_192_168_1_1_2e_34_e7_d0_21_aa_presence"
+            expected_unique_id = "wrtmanager_2e_34_e7_d0_21_aa_presence"
             assert sensor.unique_id == expected_unique_id
 
-    def test_unique_id_different_routers(self, mock_coordinator):
-        """Test that same device on different routers gets different unique IDs."""
+    def test_unique_id_same_across_routers(self, mock_coordinator):
+        """Test that same device on different routers gets the same unique ID."""
         config_entry1 = Mock()
         config_entry1.data = {"host": "192.168.1.1"}
 
@@ -80,10 +79,8 @@ class TestDeviceRegistryFixes:
             )
             sensor2.hass = mock_hass
 
-            # Same MAC, different routers should have different unique IDs
-            assert sensor1.unique_id != sensor2.unique_id
-            assert "192_168_1_1" in sensor1.unique_id
-            assert "192_168_1_2" in sensor2.unique_id
+            # Same MAC should have same unique ID regardless of router
+            assert sensor1.unique_id == sensor2.unique_id
 
     def test_via_device_with_existing_router(self, mock_coordinator, mock_config_entry):
         """Test via_device is set when router device exists."""
