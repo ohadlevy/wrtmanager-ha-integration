@@ -213,7 +213,8 @@ run_on_router "
         },
         \"write\": {
             \"ubus\": {
-                \"session\": [ \"login\", \"access\" ]
+                \"session\": [ \"login\", \"access\" ],
+                \"hostapd.*\": [ \"del_client\" ]
             }
         }
     }

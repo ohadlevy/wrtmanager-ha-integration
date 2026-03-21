@@ -166,9 +166,17 @@ class UbusClient:
                     )
                     return None
             elif result and len(result) == 1:
-                # Single element result is usually an error code
+                # Single element result: status code only, no data payload
                 error_code = result[0]
-                if error_code == 6:
+                if error_code == 0:
+                    # Success with no data (e.g. hostapd del_client)
+                    _LOGGER.debug(
+                        "ubus call %s.%s succeeded (no data returned)",
+                        service,
+                        method,
+                    )
+                    return {}
+                elif error_code == 6:
                     # Permission denied - common for dump APs
                     _LOGGER.debug(
                         "ubus call %s.%s: permission denied (code 6) - normal for dump APs",
@@ -187,12 +195,26 @@ class UbusClient:
                     )
                     return None
             else:
-                # Check for common errors that aren't really errors
-                if "error" in response_data and response_data["error"].get("code") == -32000:
+                # Handle JSON-RPC error responses
+                error = response_data.get("error", {})
+                error_code = error.get("code")
+                error_message = error.get("message", "Unknown")
+
+                if error_code == -32000:
                     # "Object not found" - normal for dump APs and missing services
                     _LOGGER.debug(
                         "ubus object/method not available: %s",
-                        response_data["error"].get("message", "Unknown"),
+                        error_message,
+                    )
+                    return None
+                elif error_code == -32002:
+                    # "Access denied" - ACL not configured for this method
+                    _LOGGER.warning(
+                        "ubus call %s.%s access denied - re-run setup script "
+                        "to update ACL permissions on %s",
+                        service,
+                        method,
+                        self.host,
                     )
                     return None
                 else:
@@ -330,6 +352,42 @@ class UbusClient:
         """Get system board information."""
         result = await self.call_ubus(session_id, "system", "board", {})
         return result if result else None
+
+    async def disconnect_client(
+        self,
+        session_id: str,
+        interface: str,
+        mac_address: str,
+        ban_time: int = 60000,
+    ) -> bool:
+        """Disconnect a WiFi client from a specific interface.
+
+        Uses hostapd del_client to deauthenticate the client.
+        A temporary ban_time prevents immediate reconnection.
+
+        Args:
+            session_id: Authenticated session ID.
+            interface: Wireless interface name (e.g. "phy0-ap0").
+            mac_address: MAC address of the client to disconnect.
+            ban_time: Temporary ban in ms (default 60s) to prevent immediate reconnect.
+
+        Returns:
+            True if the disconnect was successful, False otherwise.
+        """
+        hostapd_interface = f"hostapd.{interface}"
+        result = await self.call_ubus(
+            session_id,
+            hostapd_interface,
+            "del_client",
+            {
+                "addr": mac_address,
+                "deauth": True,
+                "reason": 5,
+                "ban_time": ban_time,
+            },
+        )
+        # del_client returns empty dict {} on success, None on failure
+        return result is not None
 
     async def close(self) -> None:
         """Close the HTTP session."""
