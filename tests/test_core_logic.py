@@ -269,50 +269,43 @@ def test_memory_usage_calculation():
     assert calculate_memory_usage(None) is None
 
 
-def test_device_vlan_counting():
-    """Test counting devices by VLAN."""
+def test_device_network_counting():
+    """Test counting devices by network name."""
 
-    def count_devices_by_vlan(devices, target_router):
-        """Count devices by VLAN for a specific router."""
-        vlan_counts = {"main": 0, "iot": 0, "guest": 0, "unknown": 0}
+    def count_devices_by_network(devices, target_router):
+        """Count devices by network for a specific router."""
+        network_counts = {}
 
         for device in devices:
             if device.get("router") == target_router:
-                vlan = device.get("vlan_id", 1)
-                if vlan == 1:
-                    vlan_counts["main"] += 1
-                elif vlan == 3:
-                    vlan_counts["iot"] += 1
-                elif vlan == 13:
-                    vlan_counts["guest"] += 1
-                else:
-                    vlan_counts["unknown"] += 1
+                network = device.get("network_name", "unknown")
+                network_counts[network] = network_counts.get(network, 0) + 1
 
-        return vlan_counts
+        return network_counts
 
     devices = [
-        {"mac_address": "AA:BB:CC:DD:EE:01", "router": "192.168.1.1", "vlan_id": 1},
-        {"mac_address": "AA:BB:CC:DD:EE:02", "router": "192.168.1.1", "vlan_id": 3},
-        {"mac_address": "AA:BB:CC:DD:EE:03", "router": "192.168.1.1", "vlan_id": 13},
-        {"mac_address": "AA:BB:CC:DD:EE:04", "router": "192.168.1.1", "vlan_id": 99},
+        {"mac_address": "AA:BB:CC:DD:EE:01", "router": "192.168.1.1", "network_name": "lan"},
+        {"mac_address": "AA:BB:CC:DD:EE:02", "router": "192.168.1.1", "network_name": "iot"},
+        {"mac_address": "AA:BB:CC:DD:EE:03", "router": "192.168.1.1", "network_name": "guest"},
+        {"mac_address": "AA:BB:CC:DD:EE:04", "router": "192.168.1.1", "network_name": "work"},
         {
             "mac_address": "AA:BB:CC:DD:EE:05",
             "router": "192.168.1.2",
-            "vlan_id": 1,
+            "network_name": "lan",
         },  # Different router
     ]
 
-    result = count_devices_by_vlan(devices, "192.168.1.1")
+    result = count_devices_by_network(devices, "192.168.1.1")
 
-    assert result["main"] == 1
+    assert result["lan"] == 1
     assert result["iot"] == 1
     assert result["guest"] == 1
-    assert result["unknown"] == 1
+    assert result["work"] == 1
 
     # Test with different router
-    result = count_devices_by_vlan(devices, "192.168.1.2")
-    assert result["main"] == 1
-    assert result["iot"] == 0
+    result = count_devices_by_network(devices, "192.168.1.2")
+    assert result["lan"] == 1
+    assert result.get("iot", 0) == 0
 
 
 def test_uptime_formatting():

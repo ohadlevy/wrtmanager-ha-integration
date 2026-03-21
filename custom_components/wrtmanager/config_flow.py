@@ -26,7 +26,6 @@ from .const import (
     CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
     CONF_SCAN_INTERVAL,
-    CONF_VLAN_NAMES,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_USE_HTTPS,
     DEFAULT_USERNAME,
@@ -36,7 +35,6 @@ from .const import (
     ERROR_CANNOT_CONNECT,
     ERROR_INVALID_AUTH,
     ERROR_UNKNOWN,
-    VLAN_NAMES,
 )
 from .ubus_client import UbusClient
 
@@ -397,8 +395,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             action = user_input.get("action")
             if action == "scan_interval":
                 return await self.async_step_scan_interval()
-            elif action == "vlan_names":
-                return await self.async_step_vlan_names()
             elif action == "router_credentials":
                 return await self.async_step_select_router()
             elif action == "add_router":
@@ -414,7 +410,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required("action"): vol.In(
                         {
                             "scan_interval": "Configure Polling Interval",
-                            "vlan_names": "Customize VLAN Names",
                             "router_credentials": "Update Router Credentials",
                             "add_router": "Add New Router",
                             "remove_router": "Remove Router",
@@ -457,47 +452,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "Higher values reduce network traffic but may result in stale data. "
                     "Range: 10-300 seconds."
                 )
-            },
-        )
-
-    async def async_step_vlan_names(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Configure VLAN names."""
-        if user_input is not None:
-            # Transform input into proper VLAN names dictionary
-            vlan_names = {}
-            for key, value in user_input.items():
-                if key.startswith("vlan_") and value.strip():
-                    vlan_id = int(key.replace("vlan_", ""))
-                    vlan_names[vlan_id] = value.strip()
-
-            # Preserve existing options and update VLAN names
-            new_options = dict(self.config_entry.options)
-            new_options[CONF_VLAN_NAMES] = vlan_names
-
-            return self.async_create_entry(title="", data=new_options)
-
-        # Get current VLAN names from options or use defaults
-        current_vlan_names = self.config_entry.options.get(CONF_VLAN_NAMES, {})
-
-        # Create form schema for VLAN customization
-        options_schema = vol.Schema(
-            {
-                vol.Optional(
-                    f"vlan_{vlan_id}",
-                    default=current_vlan_names.get(
-                        vlan_id, VLAN_NAMES.get(vlan_id, f"VLAN {vlan_id}")
-                    ),
-                ): str
-                for vlan_id in [1, 2, 3, 10, 13, 20, 100]
-            }
-        )
-
-        return self.async_show_form(
-            step_id="vlan_names",
-            data_schema=options_schema,
-            description_placeholders={
-                "description": "Customize VLAN names that will be displayed in Home Assistant. "
-                "These names will be used in device attributes and sensor breakdowns."
             },
         )
 
