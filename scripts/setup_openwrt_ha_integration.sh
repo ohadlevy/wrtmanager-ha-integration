@@ -221,16 +221,25 @@ run_on_router "
 EOF
 "
 
-# 7. Restart services
-echo "Step 7: Restarting services..."
+# 7. Preserve ACL file across firmware upgrades
+echo "Step 7: Adding ACL file to sysupgrade preservation list..."
+run_on_router "
+    if ! grep -q '/usr/share/rpcd/acl.d/hass.json' /etc/sysupgrade.conf 2>/dev/null; then
+        echo '/usr/share/rpcd/acl.d/hass.json' >> /etc/sysupgrade.conf
+    fi
+"
+echo "✅ ACL file will be preserved during firmware upgrades"
+
+# 8. Restart services
+echo "Step 8: Restarting services..."
 run_on_router "/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart"
 
 # Give services time to fully restart
 echo "Waiting for services to restart..."
 sleep 3
 
-# 8. Test the setup
-echo "Step 8: Testing authentication and API access..."
+# 9. Test the setup
+echo "Step 9: Testing authentication and API access..."
 
 # Use the router host/IP provided by user
 ROUTER_IP="$ROUTER_HOST"
@@ -373,8 +382,9 @@ echo "     Username: hass"
 echo "     Password: $HASS_PASSWORD"
 echo ""
 echo "Important notes:"
-echo "  • This configuration persists across router reboots"
-echo "  • Re-run this script after firmware updates"
+echo "  • This configuration persists across router reboots and firmware upgrades"
+echo "  • The ACL file is preserved via /etc/sysupgrade.conf"
+echo "  • After firmware upgrades, you may need to reinstall packages (uhttpd-mod-ubus, rpcd-mod-file)"
 echo "  • For multiple routers, run this script on each one"
 echo "  • Consider using a stronger password for production"
 
