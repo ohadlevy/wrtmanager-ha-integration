@@ -8,7 +8,7 @@ The Router Traffic Card is a comprehensive sensor that aggregates traffic data f
 
 ## Sensor Information
 
-**Entity Name**: `sensor.wrtmanager_{router_name}_router_traffic_total`
+**Entity Name**: `sensor.{router_name}_total_traffic`
 
 **State Value**: Total network traffic across all interfaces (in MB)
 
@@ -60,7 +60,7 @@ The sensor provides detailed traffic breakdown through these attributes:
 
 ### Multi-Router Support
 - If you have multiple routers configured, each will have its own traffic sensor
-- Entity naming follows the pattern: `sensor.wrtmanager_{router_name}_router_traffic_total`
+- Entity naming follows the pattern: `sensor.{router_name}_total_traffic`
 - You can create cards that compare traffic across multiple routers
 
 ## Dashboard Card Examples
@@ -70,14 +70,14 @@ The sensor provides detailed traffic breakdown through these attributes:
 type: entities
 title: Router Traffic
 entities:
-  - entity: sensor.wrtmanager_main_router_router_traffic_total
+  - entity: sensor.YOUR_ROUTER_total_traffic
     name: Total Network Traffic
-  - entity: sensor.wrtmanager_main_router_router_traffic_total
+  - entity: sensor.YOUR_ROUTER_total_traffic
     type: attribute
     attribute: wan_total_mb
     name: Internet Traffic
     suffix: " MB"
-  - entity: sensor.wrtmanager_main_router_router_traffic_total
+  - entity: sensor.YOUR_ROUTER_total_traffic
     type: attribute
     attribute: total_devices
     name: Connected Devices
@@ -91,13 +91,13 @@ entities:
 type: horizontal-stack
 cards:
   - type: statistic
-    entity: sensor.wrtmanager_main_router_router_traffic_total
+    entity: sensor.YOUR_ROUTER_total_traffic
     name: Total Traffic
     icon: mdi:router-wireless
     period: hour
 
   - type: statistic
-    entity: sensor.wrtmanager_main_router_router_traffic_total
+    entity: sensor.YOUR_ROUTER_total_traffic
     attribute: wan_total_mb
     name: Internet
     unit: MB
@@ -105,7 +105,7 @@ cards:
     period: hour
 
   - type: statistic
-    entity: sensor.wrtmanager_main_router_router_traffic_total
+    entity: sensor.YOUR_ROUTER_total_traffic
     attribute: total_devices
     name: Devices
     icon: mdi:devices
@@ -138,13 +138,13 @@ automation:
   - alias: "High Network Usage Alert"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.wrtmanager_main_router_router_traffic_total
+        entity_id: sensor.YOUR_ROUTER_total_traffic
         attribute: wan_total_mb
         above: 1000  # Alert when WAN traffic exceeds 1GB
     action:
       - service: notify.mobile_app
         data:
-          message: "High network usage detected: {{ states.sensor.wrtmanager_main_router_router_traffic_total.attributes.wan_total_mb }}MB"
+          message: "High network usage detected: {{ states.sensor.YOUR_ROUTER_total_traffic.attributes.wan_total_mb }}MB"
 ```
 
 ### Template Sensors
@@ -155,8 +155,8 @@ template:
   - sensor:
       - name: "Network Usage Ratio"
         state: >
-          {% set upload = state_attr('sensor.wrtmanager_main_router_router_traffic_total', 'total_upload_mb') | float %}
-          {% set download = state_attr('sensor.wrtmanager_main_router_router_traffic_total', 'total_download_mb') | float %}
+          {% set upload = state_attr('sensor.YOUR_ROUTER_total_traffic', 'total_upload_mb') | float %}
+          {% set download = state_attr('sensor.YOUR_ROUTER_total_traffic', 'total_download_mb') | float %}
           {% if download > 0 %}
             {{ (upload / download * 100) | round(1) }}
           {% else %}

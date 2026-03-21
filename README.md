@@ -1,24 +1,30 @@
 # WrtManager - Home Assistant Integration
 
-A comprehensive Home Assistant integration for managing OpenWrt networks with advanced features like VLAN organization, roaming detection, and device management.
-
-> **Current Status (v0.8):** Core functionality is stable and working. Device presence tracking, SSID monitoring, and multi-router support are fully functional. Dashboard templates and advanced sensors are in development for v1.0.
+A comprehensive Home Assistant integration for managing OpenWrt networks with multi-AP roaming detection, network topology visualization, and custom Lovelace cards.
 
 ## Features
 
-### 🏠 Network Management
+### Network Management
 - **Multi-Router Support**: Monitor and manage multiple OpenWrt access points and routers
-- **VLAN Organization**: Automatically organize devices by network segment (Main, IoT, Guest)
+- **Network Organization**: Automatically organize devices by OpenWrt network name
 - **IEEE 802.11r Roaming**: Intelligent roaming detection for enterprise wireless setups
 - **Real-time Device Tracking**: Binary sensors for device presence with rich attributes
+- **WiFi Client Disconnect**: Disconnect devices from specific APs via button entities
 
-### 🔍 Device Intelligence
+### Device Intelligence
 - **MAC OUI Identification**: Automatic device type detection using vendor databases
 - **Device Correlation**: Merge WiFi, DHCP, and ARP data for complete device visibility
 - **Signal Quality Monitoring**: Track signal strength and connection quality
 - **Historical Tracking**: Monitor device roaming patterns and connection history
 
-### 🛡️ Security & Performance
+### Custom Lovelace Cards
+- **Network Devices**: Devices grouped by AP with search, signal bars, and disconnect action
+- **Router Health**: Memory, temperature, traffic, and device count per router
+- **Network Topology**: Visual radial layout with signal quality color coding
+- **Signal Heatmap**: Signal strength list with quality filtering
+- **Roaming Activity**: Live roaming event log tracking AP changes in real time
+
+### Security & Performance
 - **HTTP ubus API**: Secure communication without SSH access required
 - **Dedicated Authentication**: Uses limited-privilege `hass` user account
 - **Parallel Data Collection**: Efficient scanning across multiple routers
@@ -105,14 +111,12 @@ WrtManager is designed for modern network setups including:
 
 ### Multi-AP Networks
 - **IEEE 802.11r Fast Roaming**: Seamless device handoff between access points
-- **Ethernet Backhaul**: Connected APs with consistent SSID/VLAN mapping
+- **Ethernet Backhaul**: Connected APs with consistent SSID mapping
 - **Mesh Networks**: Support for wireless mesh configurations
 
-### VLAN Segmentation
-- **Main Network** (VLAN 1): Primary devices, full access
-- **IoT Network** (VLAN 3): Smart home devices, limited access
-- **Guest Network** (VLAN 13): Visitor access, isolated
-- **Custom VLANs**: Support for additional network segments
+### Network Segmentation
+- Devices are organized by their OpenWrt network name (e.g., `lan`, `guest`, `iot`)
+- Network names are automatically detected from the router configuration
 
 ### Device Types
 Automatically identifies and categorizes:
@@ -130,16 +134,16 @@ Automatically identifies and categorizes:
 ### Binary Sensors
 - **Device Presence**: `binary_sensor.{device_name}_presence`
   - State: Connected/Disconnected
-  - Attributes: IP, MAC, vendor, signal strength, VLAN, roaming info
+  - Attributes: IP, MAC, vendor, signal strength, network, roaming info
 
 ### Sensors
 - **System Monitoring**: Router uptime, memory usage, load average, temperature
-- **Network Statistics**: Device counts per VLAN and interface
+- **Network Statistics**: Device counts per network and interface, signal strength per interface
 - **Router Traffic**: Comprehensive network traffic monitoring with breakdown by interface type
 - **SSID Status**: Binary sensors for SSID enabled/disabled state per router/area
 
 #### Router Traffic Sensor
-- **Entity**: `sensor.wrtmanager_{router_name}_router_traffic_total`
+- **Entity**: `sensor.{router_name}_total_traffic`
 - **Function**: Aggregates traffic data from all router interfaces for comprehensive network monitoring
 - **Unit**: Megabytes (MB) - cumulative totals since last router reboot
 - **Documentation**: See [Router Traffic Card Guide](docs/router-traffic-card.md) for detailed usage instructions
@@ -153,11 +157,8 @@ Automatically identifies and categorizes:
   - Connected devices: `total_devices`, `wifi_devices`, `ethernet_devices`
   - Router information: `router_name`, `router_host`
 
-### Future Sensors (v1.0+)
-- **Signal Strength**: Real-time signal quality monitoring (currently available as attributes)
-- **Roaming Count**: Track device movement between APs
-- **Network Summary**: Overall network statistics and performance metrics
-- **Device Tracker**: Location-based presence detection
+### Buttons
+- **Disconnect**: `button.{device_name}_disconnect_from_{router_name}` — Disconnect a WiFi client from a specific AP
 
 ## Configuration
 
@@ -180,42 +181,64 @@ Automatically identifies and categorizes:
 - Track roaming patterns in mesh/multi-AP setups
 - Monitor different network segments (main router + guest AP, etc.)
 
-### VLAN Mapping
+## Custom Lovelace Cards
 
-Automatic VLAN detection based on IP ranges:
-- `192.168.1.x` → Main Network (VLAN 1)
-- `192.168.5.x` → IoT Network (VLAN 3)
-- `192.168.13.x` → Guest Network (VLAN 13)
+WrtManager ships with 5 custom Lovelace cards that auto-register on integration setup. All cards auto-discover your routers and devices from the HA device registry — no manual entity configuration needed.
 
-Custom VLAN mappings can be configured in the integration options.
+| Card | Description |
+|------|-------------|
+| `custom:network-devices-card` | WiFi devices grouped by AP with search, signal bars, cross-integration badges, and disconnect action |
+| `custom:router-health-card` | Router health overview — memory, temperature, traffic, device count per router |
+| `custom:network-topology-card` | Visual radial network topology with signal quality color coding |
+| `custom:signal-heatmap-card` | Signal strength list with quality filter chips (Poor/Fair/Good/Excellent) |
+| `custom:roaming-activity-card` | Active roamers and live roaming event log tracking AP changes in real time |
 
-## Dashboard Examples
+### Quick Start
 
-WrtManager includes example dashboard configurations to help you get started with visualizing your network data:
+Add cards to any dashboard — zero config required:
 
-### Router Traffic Monitoring
-- **Router Traffic Cards**: [`examples/router-traffic-card.yaml`](examples/router-traffic-card.yaml) - Multiple card examples similar to GitHub issue #87, including comprehensive, compact, and advanced layouts
-- **Complete Dashboard**: [`examples/traffic-dashboard.yaml`](examples/traffic-dashboard.yaml) - Full-featured traffic monitoring dashboard with history graphs and detailed statistics
-- **Simple Card**: [`examples/traffic-card-simple.yaml`](examples/traffic-card-simple.yaml) - Minimal traffic card configuration for quick setup
+```yaml
+views:
+  - title: Network
+    cards:
+      - type: custom:network-devices-card
+      - type: custom:router-health-card
+      - type: custom:signal-heatmap-card
+      - type: custom:roaming-activity-card
 
-These examples showcase:
-- **Router Traffic Cards**: Various card styles for displaying total traffic, breakdown by interface type, device counts, and multi-router comparison
-- **Complete Dashboard**: Historical trends, interface statistics, and comprehensive monitoring
-- **Simple Cards**: Basic traffic overview and compact layouts
-- Traffic breakdown by interface type (WAN/Internet, WiFi, Ethernet)
-- Connected device monitoring with counts per interface type
-- Multi-router support for complex network setups
+  - title: Topology
+    panel: true
+    cards:
+      - type: custom:network-topology-card
+```
 
-**Getting Started with Dashboard Examples**:
-1. **For Quick Setup**: Start with [`router-traffic-card.yaml`](examples/router-traffic-card.yaml) Example 1 or 2
-2. **For Advanced Monitoring**: Use the complete dashboard from [`traffic-dashboard.yaml`](examples/traffic-dashboard.yaml)
-3. **For Minimal Display**: Use the simple card from [`traffic-card-simple.yaml`](examples/traffic-card-simple.yaml)
+### Card Options
 
-**Setup Instructions**:
-1. Copy the desired YAML configuration
-2. Replace `main_router` with your actual router name in entity IDs (format: `sensor.wrtmanager_{router_name}_router_traffic_total`)
-3. Add to your Home Assistant dashboard using the YAML editor
-4. Install any required custom components (like `bar-card`) via HACS if using advanced examples
+```yaml
+# Network Devices — optional overrides
+type: custom:network-devices-card
+show_offline: true
+ap_order:
+  - 192.168.1.1
+  - 192.168.1.2
+network_labels:
+  lan: "Main LAN"
+  guest: "Guest"
+
+# Router Health — optional role labels
+type: custom:router-health-card
+router_roles:
+  192.168.1.1: "Main Router"
+  192.168.1.2: "AP - Bedroom"
+
+# Roaming Activity — custom log size
+type: custom:roaming-activity-card
+max_log_entries: 50
+```
+
+### Full Dashboard Example
+
+See [`examples/dashboard.yaml`](examples/dashboard.yaml) for a complete dashboard with all custom cards and traffic monitoring.
 
 ## Troubleshooting
 
@@ -269,23 +292,21 @@ make help       # See all available commands
 ## Roadmap
 
 ### v1.0 - Complete User Experience (In Progress)
-- [ ] Advanced sensor entities (signal strength, roaming counts)
-- [ ] Pre-built Lovelace dashboards
-- [ ] Network topology visualization
+- [x] Advanced sensor entities (signal strength, roaming counts)
+- [x] Pre-built Lovelace cards (5 custom cards bundled with integration)
+- [x] Network topology visualization
+- [x] Device disconnection
 - [ ] Performance analytics and monitoring
 
 ### v1.1 - Enhanced Management
-- [ ] Device disconnection/blocking
 - [ ] Guest network management
 - [ ] Bandwidth monitoring per device
 
 ### v1.2 - Automation Features
 - [ ] Device approval workflows
 - [ ] New device notifications
-- [ ] VLAN assignment automation
 
 ### v1.3 - Advanced Analytics
-- [ ] Network topology mapping
 - [ ] Performance analytics dashboard
 - [ ] Firmware update notifications
 

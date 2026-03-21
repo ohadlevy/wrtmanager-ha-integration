@@ -1,0 +1,68 @@
+# WrtManager Dashboard Example
+# All custom cards auto-discover routers and devices — no entity configuration needed.
+# Copy this into your Home Assistant dashboard using the raw YAML editor.
+
+views:
+  - title: Network
+    cards:
+      - type: custom:network-devices-card
+      - type: custom:router-health-card
+      - type: custom:signal-heatmap-card
+      - type: custom:roaming-activity-card
+
+  - title: Topology
+    panel: true
+    cards:
+      - type: custom:network-topology-card
+
+  # Optional: Traffic details using standard HA cards
+  # Replace YOUR_ROUTER with your router name (e.g., sensor.rutr_total_traffic)
+  # Find your entity: Settings → Devices → your router → look for "Total Traffic"
+  - title: Traffic
+    cards:
+      - type: entities
+        title: Router Traffic
+        show_header_toggle: false
+        entities:
+          - entity: sensor.YOUR_ROUTER_total_traffic
+            name: Total Network Traffic
+            icon: mdi:router-wireless
+          - type: divider
+          - entity: sensor.YOUR_ROUTER_total_traffic
+            type: attribute
+            attribute: wan_total_mb
+            name: Internet Traffic
+            suffix: " MB"
+            icon: mdi:web
+          - entity: sensor.YOUR_ROUTER_total_traffic
+            type: attribute
+            attribute: wifi_total_mb
+            name: WiFi Traffic
+            suffix: " MB"
+            icon: mdi:wifi
+          - entity: sensor.YOUR_ROUTER_total_traffic
+            type: attribute
+            attribute: ethernet_total_mb
+            name: Ethernet Traffic
+            suffix: " MB"
+            icon: mdi:ethernet
+          - type: divider
+          - entity: sensor.YOUR_ROUTER_total_traffic
+            type: attribute
+            attribute: total_download_mb
+            name: Total Download
+            suffix: " MB"
+            icon: mdi:download
+          - entity: sensor.YOUR_ROUTER_total_traffic
+            type: attribute
+            attribute: total_upload_mb
+            name: Total Upload
+            suffix: " MB"
+            icon: mdi:upload
+
+      - type: history-graph
+        title: Traffic Trend (Last 24 Hours)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.YOUR_ROUTER_total_traffic
+            name: Total Traffic
