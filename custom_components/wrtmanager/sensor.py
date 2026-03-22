@@ -77,6 +77,7 @@ async def async_setup_entry(
             [
                 WrtManagerMemoryUsageSensor(coordinator, router_host, router_name),
                 WrtManagerMemoryFreeSensor(coordinator, router_host, router_name),
+                WrtManagerUptimeSensor(coordinator, router_host, router_name),
             ]
         )
 
@@ -401,6 +402,43 @@ class WrtManagerTemperatureSensor(WrtManagerSensorBase):
     def available(self) -> bool:
         """Return if temperature is available."""
         return super().available and self._get_system_data().get("temperature") is not None
+
+
+class WrtManagerUptimeSensor(WrtManagerSensorBase):
+    """Sensor for router uptime."""
+
+    def __init__(self, coordinator: WrtManagerCoordinator, router_host: str, router_name: str):
+        """Initialize the uptime sensor."""
+        super().__init__(coordinator, router_host, router_name, "uptime", "Uptime")
+        self._attr_device_class = SensorDeviceClass.DURATION
+        self._attr_native_unit_of_measurement = UNIT_SECONDS
+        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_icon = "mdi:clock-outline"
+
+    @property
+    def native_value(self) -> Optional[int]:
+        """Return uptime in seconds."""
+        system_data = self._get_system_data()
+        return system_data.get("uptime")
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return human-readable uptime breakdown."""
+        system_data = self._get_system_data()
+        uptime_seconds = system_data.get("uptime")
+        if uptime_seconds is None:
+            return {}
+
+        days = uptime_seconds // 86400
+        hours = (uptime_seconds % 86400) // 3600
+        minutes = (uptime_seconds % 3600) // 60
+
+        return {
+            "days": days,
+            "hours": hours,
+            "minutes": minutes,
+            "uptime_formatted": f"{days}d {hours}h {minutes}m",
+        }
 
 
 class WrtManagerDeviceCountSensor(WrtManagerSensorBase):

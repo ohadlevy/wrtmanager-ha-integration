@@ -630,6 +630,8 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       const tempId = `sensor.${prefix}_temperature`;
       const temp = this.hass.states[tempId];
       const traffic = this.hass.states[`sensor.${prefix}_total_traffic`];
+      const uptimeId = `sensor.${prefix}_uptime`;
+      const uptime = this.hass.states[uptimeId];
 
       let haDevice = null;
       let routerHost = null;
@@ -679,6 +681,8 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         totalTraffic: parseState(traffic),
         trafficId: traffic ? `sensor.${prefix}_total_traffic` : null,
         trafficAttrs: traffic?.attributes || {},
+        uptimeFormatted: uptime?.attributes?.uptime_formatted || null,
+        uptimeId: uptime ? uptimeId : null,
         model: haDevice?.model || state.attributes.model || "",
         swVersion: haDevice?.sw_version || state.attributes.sw_version || "",
         haDeviceId: haDevice?.id || null,
@@ -767,6 +771,11 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
               <span class="rhc-traffic-label">since boot</span>
             </div>
           </div>` : ""}
+        ${r.uptimeFormatted != null ? html`
+          <div class="rhc-uptime rhc-clickable" title="Router uptime" @click=${() => this.showMoreInfo(r.uptimeId)}>
+            <ha-icon icon="mdi:clock-outline" style="--mdc-icon-size: 14px;"></ha-icon>
+            <span>${r.uptimeFormatted}</span>
+          </div>` : ""}
         ${r.swVersion ? html`<div class="rhc-version">${r.swVersion}</div>` : ""}
       </div>
     `;
@@ -811,6 +820,7 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-gauge-label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-row { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-label { font-size: 0.85em; opacity: 0.5; margin-left: auto; }
+      .rhc-uptime { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
       .rhc-clickable { cursor: pointer; border-radius: 6px; padding: 2px; margin: -2px; }
       .rhc-clickable:hover { background: rgba(var(--rgb-primary-color,255,255,255),0.05); }
