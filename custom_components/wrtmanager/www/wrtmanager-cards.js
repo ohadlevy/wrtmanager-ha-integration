@@ -633,6 +633,14 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       const traffic = this.hass.states[`sensor.${prefix}_total_traffic`];
       const uptimeId = `sensor.${prefix}_uptime`;
       const uptime = this.hass.states[uptimeId];
+      const cpuUsageId = `sensor.${prefix}_cpu_usage`;
+      const cpuUsage = this.hass.states[cpuUsageId];
+      const loadAvg1mId = `sensor.${prefix}_load_average_1m`;
+      const loadAvg1m = this.hass.states[loadAvg1mId];
+      const loadAvg5mId = `sensor.${prefix}_load_average_5m`;
+      const loadAvg5m = this.hass.states[loadAvg5mId];
+      const loadAvg15mId = `sensor.${prefix}_load_average_15m`;
+      const loadAvg15m = this.hass.states[loadAvg15mId];
 
       let haDevice = null;
       let routerHost = null;
@@ -685,6 +693,13 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         uptime: uptime && uptime.state !== "unavailable" && uptime.state !== "unknown" ? Number(uptime.state) : null,
         uptimeId: uptime ? uptimeId : null,
         uptimeAttrs: uptime?.attributes || {},
+        cpuUsage: parseState(cpuUsage),
+        cpuUsageId: cpuUsage ? cpuUsageId : null,
+        loadAvg1m: parseState(loadAvg1m),
+        loadAvg1mId: loadAvg1m ? loadAvg1mId : null,
+        loadAvg5m: parseState(loadAvg5m),
+        loadAvg15m: parseState(loadAvg15m),
+        loadAvg5mId: loadAvg5m ? loadAvg5mId : null,
         model: haDevice?.model || state.attributes.model || "",
         swVersion: haDevice?.sw_version || state.attributes.sw_version || "",
         haDeviceId: haDevice?.id || null,
@@ -706,6 +721,13 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
     if (temp == null) return "var(--secondary-text-color)";
     if (temp < 60) return "#4caf50";
     if (temp < 75) return "#ff9800";
+    return "#f44336";
+  }
+
+  _cpuColor(pct) {
+    if (pct == null) return "var(--secondary-text-color)";
+    if (pct < 60) return "#4caf50";
+    if (pct < 80) return "#ff9800";
     return "#f44336";
   }
 
@@ -778,6 +800,19 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         <div class="rhc-clickable" title="RAM usage" @click=${() => this.showMoreInfo(r.memoryUsageId)}>
           ${this._renderGauge(r.memoryUsage, 100, this._memoryColor(r.memoryUsage), "Memory", "%")}
         </div>
+        ${r.cpuUsage != null ? html`
+          <div class="rhc-clickable" title="CPU usage" @click=${() => this.showMoreInfo(r.cpuUsageId)}>
+            ${this._renderGauge(r.cpuUsage, 100, this._cpuColor(r.cpuUsage), "CPU", "%")}
+          </div>` : ""}
+        ${r.loadAvg1m != null ? html`
+          <div class="rhc-load rhc-clickable" title="Load average (1m / 5m / 15m)" @click=${() => this.showMoreInfo(r.loadAvg1mId)}>
+            <span class="rhc-load-label">Load</span>
+            <span style="color:${this._cpuColor(r.loadAvg1m * 100 / 4)}">${r.loadAvg1m?.toFixed(2)}</span>
+            <span class="rhc-load-sep">/</span>
+            <span>${r.loadAvg5m != null ? r.loadAvg5m.toFixed(2) : "-"}</span>
+            <span class="rhc-load-sep">/</span>
+            <span>${r.loadAvg15m != null ? r.loadAvg15m.toFixed(2) : "-"}</span>
+          </div>` : ""}
         ${r.totalTraffic != null ? html`
           <div class="rhc-traffic rhc-clickable" title="Cumulative traffic since router boot" @click=${() => this.showMoreInfo(r.trafficId)}>
             <div class="rhc-traffic-row">
@@ -830,6 +865,9 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-gauge-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
       .rhc-gauge-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
       .rhc-gauge-label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--secondary-text-color); }
+      .rhc-load { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); font-family: monospace; }
+      .rhc-load-label { font-family: inherit; font-size: 0.95em; }
+      .rhc-load-sep { opacity: 0.4; }
       .rhc-traffic-row { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-label { font-size: 0.85em; opacity: 0.5; margin-left: auto; }
       .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }

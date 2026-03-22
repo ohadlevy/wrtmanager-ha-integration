@@ -137,7 +137,7 @@ Automatically identifies and categorizes:
   - Attributes: IP, MAC, vendor, signal strength, network, roaming info
 
 ### Sensors
-- **System Monitoring**: Router uptime, memory usage, load average, temperature
+- **System Monitoring**: Router uptime, memory usage, CPU usage, load average (1m/5m/15m), temperature
 - **Network Statistics**: Device counts per network and interface, signal strength per interface
 - **Router Traffic**: Comprehensive network traffic monitoring with breakdown by interface type
 - **SSID Status**: Binary sensors for SSID enabled/disabled state per router/area
@@ -188,7 +188,7 @@ WrtManager ships with 5 custom Lovelace cards that auto-register on integration 
 | Card | Description |
 |------|-------------|
 | `custom:network-devices-card` | WiFi devices grouped by AP with search, signal bars, cross-integration badges, and disconnect action |
-| `custom:router-health-card` | Router health overview — memory, temperature, traffic, device count per router |
+| `custom:router-health-card` | Router health overview — memory, CPU usage, load average, temperature, traffic, device count per router |
 | `custom:network-topology-card` | Visual radial network topology with signal quality color coding |
 | `custom:signal-heatmap-card` | Signal strength list with quality filter chips (Poor/Fair/Good/Excellent) |
 | `custom:roaming-activity-card` | Active roamers and live roaming event log tracking AP changes in real time |

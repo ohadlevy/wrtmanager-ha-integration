@@ -78,6 +78,10 @@ async def async_setup_entry(
                 WrtManagerUptimeSensor(coordinator, router_host, router_name),
                 WrtManagerMemoryUsageSensor(coordinator, router_host, router_name),
                 WrtManagerMemoryFreeSensor(coordinator, router_host, router_name),
+                WrtManagerLoadAverageSensor(coordinator, router_host, router_name, "1m"),
+                WrtManagerLoadAverageSensor(coordinator, router_host, router_name, "5m"),
+                WrtManagerLoadAverageSensor(coordinator, router_host, router_name, "15m"),
+                WrtManagerCpuUsageSensor(coordinator, router_host, router_name),
             ]
         )
 
@@ -440,6 +444,63 @@ class WrtManagerTemperatureSensor(WrtManagerSensorBase):
     def available(self) -> bool:
         """Return if temperature is available."""
         return super().available and self._get_system_data().get("temperature") is not None
+
+
+class WrtManagerLoadAverageSensor(WrtManagerSensorBase):
+    """Sensor for load average (1m, 5m, or 15m)."""
+
+    _INTERVAL_MAP = {"1m": 0, "5m": 1, "15m": 2}
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        router_host: str,
+        router_name: str,
+        interval: str,
+    ) -> None:
+        """Initialize the load average sensor."""
+        super().__init__(
+            coordinator,
+            router_host,
+            router_name,
+            f"load_average_{interval}",
+            f"Load Average {interval}",
+        )
+        self._interval = interval
+        self._idx = self._INTERVAL_MAP[interval]
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:gauge"
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return load average (fixed-point divided by 65536)."""
+        system_data = self._get_system_data()
+        load = system_data.get("load", [])
+        if len(load) > self._idx:
+            return round(load[self._idx] / 65536, 2)
+        return None
+
+
+class WrtManagerCpuUsageSensor(WrtManagerSensorBase):
+    """Sensor for CPU usage percentage."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        router_host: str,
+        router_name: str,
+    ) -> None:
+        """Initialize the CPU usage sensor."""
+        super().__init__(coordinator, router_host, router_name, "cpu_usage", "CPU Usage")
+        self._attr_native_unit_of_measurement = PERCENTAGE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:chip"
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return CPU usage percentage computed from /proc/stat delta."""
+        system_data = self._get_system_data()
+        return system_data.get("cpu_usage")
 
 
 class WrtManagerDeviceCountSensor(WrtManagerSensorBase):

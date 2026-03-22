@@ -353,6 +353,10 @@ class UbusClient:
         result = await self.call_ubus(session_id, "system", "board", {})
         return result if result else None
 
+    async def get_cpu_stat(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Read /proc/stat to get raw CPU counters for usage calculation."""
+        return await self.call_ubus(session_id, "file", "read", {"path": "/proc/stat"})
+
     async def disconnect_client(
         self,
         session_id: str,

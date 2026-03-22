@@ -142,6 +142,7 @@ class TestDHCPPollingOptimization:
             client.get_device_associations = AsyncMock(return_value=[])
             client.get_system_info = AsyncMock(return_value={})
             client.get_system_board = AsyncMock(return_value={})
+            client.get_cpu_stat = AsyncMock(return_value=None)
             client.get_network_interfaces = AsyncMock(return_value={})
             client.get_wireless_status = AsyncMock(return_value={})
 
@@ -177,6 +178,7 @@ class TestDHCPPollingOptimization:
         client.get_device_associations = AsyncMock(return_value=[])
         client.get_system_info = AsyncMock(return_value={})
         client.get_system_board = AsyncMock(return_value={})
+        client.get_cpu_stat = AsyncMock(return_value=None)
         client.get_network_interfaces = AsyncMock(return_value={})
         client.get_wireless_status = AsyncMock(return_value={})
         client.get_dhcp_leases = AsyncMock(return_value=None)
@@ -202,6 +204,7 @@ class TestDHCPPollingOptimization:
         client.get_device_associations = AsyncMock(return_value=[])
         client.get_system_info = AsyncMock(return_value={})
         client.get_system_board = AsyncMock(return_value={})
+        client.get_cpu_stat = AsyncMock(return_value=None)
         client.get_network_interfaces = AsyncMock(return_value={})
         client.get_wireless_status = AsyncMock(return_value={})
         client.get_dhcp_leases = AsyncMock(return_value=None)
@@ -294,6 +297,7 @@ class TestDHCPPollingOptimization:
             client.get_device_associations = AsyncMock(return_value=[])
             client.get_system_info = AsyncMock(return_value={})
             client.get_system_board = AsyncMock(return_value={})
+            client.get_cpu_stat = AsyncMock(return_value=None)
             client.get_network_interfaces = AsyncMock(return_value={})
             client.get_wireless_status = AsyncMock(return_value={})
 
@@ -328,6 +332,7 @@ class TestDHCPPollingOptimization:
         client.get_device_associations = AsyncMock(return_value=[])
         client.get_system_info = AsyncMock(return_value={})
         client.get_system_board = AsyncMock(return_value={})
+        client.get_cpu_stat = AsyncMock(return_value=None)
         client.get_network_interfaces = AsyncMock(return_value={})
         client.get_wireless_status = AsyncMock(return_value={})
         client.get_dhcp_leases = AsyncMock(return_value=None)
@@ -398,6 +403,7 @@ class TestDHCPPollingOptimization:
             client.get_device_associations = AsyncMock(return_value=[])
             client.get_system_info = AsyncMock(return_value={})
             client.get_system_board = AsyncMock(return_value={})
+            client.get_cpu_stat = AsyncMock(return_value=None)
             client.get_network_interfaces = AsyncMock(return_value={})
             client.get_wireless_status = AsyncMock(return_value={})
             client.get_dhcp_leases = AsyncMock(

@@ -84,6 +84,9 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         self._dhcp_routers: Set[str] = set()  # Track which routers actually serve DHCP
         self._tried_dhcp: Set[str] = set()  # Track which routers we've already tested
 
+        # CPU stats tracking for usage calculation
+        self._cpu_stats: Dict[str, Dict[str, int]] = {}  # Router host -> previous CPU counters
+
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from all routers."""
         _LOGGER.debug("Starting data update for %d routers", len(self.routers))
@@ -287,6 +290,18 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
             if system_info:
                 system_data = {**system_info, **(system_board or {})}
+
+            # Get CPU stats for usage calculation (requires two samples for delta)
+            cpu_stat_result = await client.get_cpu_stat(session_id)
+            if cpu_stat_result and "data" in cpu_stat_result:
+                cpu_counters = self._parse_cpu_stat(cpu_stat_result["data"])
+                if cpu_counters:
+                    prev_counters = self._cpu_stats.get(host)
+                    if prev_counters:
+                        system_data["cpu_usage"] = self._compute_cpu_usage(
+                            prev_counters, cpu_counters
+                        )
+                    self._cpu_stats[host] = cpu_counters
 
             # Get network interface status
             network_interfaces = await client.get_network_interfaces(session_id)
@@ -619,6 +634,59 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             k: "***REDACTED***" if k in sensitive_fields and v is not None else v
             for k, v in config.items()
         }
+
+    @staticmethod
+    def _parse_cpu_stat(data: str) -> Optional[Dict[str, int]]:
+        """Parse the aggregate CPU line from /proc/stat.
+
+        Returns a dict with keys: user, nice, system, idle, iowait, irq, softirq, steal.
+        Returns None if the data cannot be parsed.
+        """
+        for line in data.split("\n"):
+            if line.startswith("cpu "):
+                fields = line.split()
+                if len(fields) >= 8:
+                    return {
+                        "user": int(fields[1]),
+                        "nice": int(fields[2]),
+                        "system": int(fields[3]),
+                        "idle": int(fields[4]),
+                        "iowait": int(fields[5]),
+                        "irq": int(fields[6]),
+                        "softirq": int(fields[7]),
+                        "steal": int(fields[8]) if len(fields) > 8 else 0,
+                    }
+        return None
+
+    @staticmethod
+    def _compute_cpu_usage(prev: Dict[str, int], curr: Dict[str, int]) -> float:
+        """Compute CPU usage percentage from two consecutive /proc/stat samples."""
+        prev_active = (
+            prev["user"]
+            + prev["nice"]
+            + prev["system"]
+            + prev["irq"]
+            + prev["softirq"]
+            + prev["steal"]
+        )
+        curr_active = (
+            curr["user"]
+            + curr["nice"]
+            + curr["system"]
+            + curr["irq"]
+            + curr["softirq"]
+            + curr["steal"]
+        )
+        prev_total = prev_active + prev["idle"] + prev["iowait"]
+        curr_total = curr_active + curr["idle"] + curr["iowait"]
+
+        delta_active = curr_active - prev_active
+        delta_total = curr_total - prev_total
+
+        if delta_total <= 0:
+            return 0.0
+
+        return round((delta_active / delta_total) * 100, 1)
 
     def _extract_ssid_data(self, interfaces: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
         """Extract SSID information from wireless status data."""
