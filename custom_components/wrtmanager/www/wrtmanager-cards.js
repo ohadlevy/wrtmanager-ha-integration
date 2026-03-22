@@ -630,6 +630,8 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       const tempId = `sensor.${prefix}_temperature`;
       const temp = this.hass.states[tempId];
       const traffic = this.hass.states[`sensor.${prefix}_total_traffic`];
+      const uptimeId = `sensor.${prefix}_uptime`;
+      const uptime = this.hass.states[uptimeId];
 
       let haDevice = null;
       let routerHost = null;
@@ -679,6 +681,8 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         totalTraffic: parseState(traffic),
         trafficId: traffic ? `sensor.${prefix}_total_traffic` : null,
         trafficAttrs: traffic?.attributes || {},
+        uptime: uptime && uptime.state !== "unavailable" && uptime.state !== "unknown" ? uptime.attributes?.uptime_formatted || null : null,
+        uptimeId: uptime ? uptimeId : null,
         model: haDevice?.model || state.attributes.model || "",
         swVersion: haDevice?.sw_version || state.attributes.sw_version || "",
         haDeviceId: haDevice?.id || null,
@@ -757,6 +761,11 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         <div class="rhc-clickable" title="RAM usage" @click=${() => this.showMoreInfo(r.memoryUsageId)}>
           ${this._renderGauge(r.memoryUsage, 100, this._memoryColor(r.memoryUsage), "Memory", "%")}
         </div>
+        ${r.uptime != null ? html`
+          <div class="rhc-uptime rhc-clickable" title="Router uptime" @click=${() => this.showMoreInfo(r.uptimeId)}>
+            <ha-icon icon="mdi:clock-outline" style="--mdc-icon-size: 14px;"></ha-icon>
+            <span>${r.uptime}</span>
+          </div>` : ""}
         ${r.totalTraffic != null ? html`
           <div class="rhc-traffic rhc-clickable" title="Cumulative traffic since router boot" @click=${() => this.showMoreInfo(r.trafficId)}>
             <div class="rhc-traffic-row">
@@ -809,6 +818,7 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-gauge-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
       .rhc-gauge-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
       .rhc-gauge-label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--secondary-text-color); }
+      .rhc-uptime { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-row { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-label { font-size: 0.85em; opacity: 0.5; margin-left: auto; }
       .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
