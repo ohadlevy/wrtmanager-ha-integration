@@ -273,6 +273,21 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
     return {};
   }
 
+  shouldUpdate(changedProps) {
+    if (changedProps.has("hass") && changedProps.size === 1) {
+      // Only re-render for hass changes if presence sensor states actually changed
+      const oldHass = changedProps.get("hass");
+      if (!oldHass) return true;
+      for (const [k, v] of Object.entries(this.hass.states)) {
+        if (k.endsWith("_presence") || k.includes("disconnect")) {
+          if (oldHass.states[k] !== v) return true;
+        }
+      }
+      return false;
+    }
+    return true;
+  }
+
   _getNetworkLabel(networkName) {
     if (this.config.network_labels?.[networkName]) {
       return this.config.network_labels[networkName];
@@ -390,47 +405,36 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
     const disconnectId = this.getDisconnectEntityId(d);
     const canDisconnect = disconnectId && this.hass?.states?.[disconnectId];
     return html`
-      <tr
-        class="ndc-clickable ${d.online ? "" : "ndc-offline"}"
+      <div
+        class="ndc-row ndc-clickable ${d.online ? "" : "ndc-offline"}"
         @click=${() => this._onDeviceClick(d)}
         title=${d.haDeviceId ? "Open device page" : "Show entity details"}
       >
-        <td class="ndc-device-cell">
+        <ha-icon
+          icon=${this._typeIcon(d.deviceType)}
+          class="ndc-type-icon"
+          title=${d.deviceType}
+        ></ha-icon>
+        <div class="ndc-device-info">
+          <span class="ndc-device-name">
+            ${d.name}
+            ${this._renderIntegrationBadges(d.otherIntegrations)}
+          </span>
+          <span class="ndc-device-meta">
+            ${d.ip !== "-" ? html`<span class="ndc-ip">${d.ip}</span>` : ""}
+            <span class="ndc-signal" style="color: ${signalColor(d.signal)}">${signalBar(d.signal)}</span>
+            ${networkLabel !== "-" ? html`<span class="ndc-net">${networkLabel}</span>` : ""}
+            ${subtitle ? html`<span class="ndc-meta-sub">${subtitle}</span>` : ""}
+          </span>
+        </div>
+        ${canDisconnect ? html`
           <ha-icon
-            icon=${this._typeIcon(d.deviceType)}
-            class="ndc-type-icon"
-            title=${d.deviceType}
-          ></ha-icon>
-          <div class="ndc-device-info">
-            <span class="ndc-device-name">
-              ${d.name}
-              ${this._renderIntegrationBadges(d.otherIntegrations)}
-            </span>
-            ${subtitle
-              ? html`<span class="ndc-device-vendor">${subtitle}</span>`
-              : ""}
-          </div>
-        </td>
-        <td class="ndc-col-ip ndc-ip">${d.ip}</td>
-        <td
-          class="ndc-col-signal ndc-signal"
-          style="color: ${signalColor(d.signal)}"
-        >
-          ${signalBar(d.signal)}
-        </td>
-        <td class="ndc-col-net">
-          <span class="ndc-net">${networkLabel}</span>
-        </td>
-        <td class="ndc-col-action">
-          ${canDisconnect ? html`
-            <ha-icon
-              icon="mdi:wifi-remove"
-              class="ndc-disconnect"
-              title="Disconnect from AP"
-              @click=${(e) => this.disconnectDevice(e, d)}
-            ></ha-icon>` : ""}
-        </td>
-      </tr>
+            icon="mdi:wifi-remove"
+            class="ndc-disconnect"
+            title="Disconnect from AP"
+            @click=${(e) => this.disconnectDevice(e, d)}
+          ></ha-icon>` : ""}
+      </div>
     `;
   }
 
@@ -508,20 +512,9 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
             return html`
               <div class="ndc-group">
                 ${this._renderApHeader(ap, apDevices.length)}
-                <table class="ndc-table">
-                  <thead>
-                    <tr>
-                      <th>Device</th>
-                      <th class="ndc-col-ip">IP</th>
-                      <th class="ndc-col-signal">Signal</th>
-                      <th class="ndc-col-net">Network</th>
-                      <th class="ndc-col-action"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${apDevices.map((d) => this._renderDeviceRow(d))}
-                  </tbody>
-                </table>
+                <div class="ndc-list">
+                  ${apDevices.map((d) => this._renderDeviceRow(d))}
+                </div>
               </div>
             `;
           })}
@@ -532,8 +525,8 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
 
   static get styles() {
     return css`
-      :host { --ndc-spacing: 16px; display: block; overflow: hidden; }
-      .ndc { padding: var(--ndc-spacing); overflow: hidden; }
+      :host { --ndc-spacing: 16px; display: block; }
+      .ndc { padding: var(--ndc-spacing); }
       .ndc-summary { color: var(--secondary-text-color); margin-bottom: 12px; font-size: 0.95em; }
       .ndc-summary b { color: var(--primary-text-color); }
       .ndc-search-wrap { position: relative; margin-bottom: 16px; }
@@ -552,38 +545,23 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
       .ndc-filter-btn { margin-left: auto; color: var(--secondary-text-color); opacity: 0.4; }
       .ndc-filter-btn:hover { opacity: 1; }
       .ndc-count { color: var(--secondary-text-color); font-weight: normal; font-size: 0.85em; }
-      table.ndc-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
-      .ndc-table th { text-align: left; padding: 6px 10px; color: var(--secondary-text-color); font-weight: 500; font-size: 0.8em; text-transform: uppercase; overflow: hidden; }
-      .ndc-table .ndc-col-action { width: 32px; text-align: center; }
-      .ndc-table td { padding: 7px 10px; border-bottom: 1px solid var(--divider-color, #222); }
-      .ndc-table tr:last-child td { border-bottom: none; }
-      .ndc-clickable { cursor: pointer; }
-      .ndc-clickable:hover { background: rgba(var(--rgb-primary-color,255,255,255),0.05); }
+      .ndc-list { display: flex; flex-direction: column; gap: 2px; }
+      .ndc-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+      .ndc-row:hover { background: rgba(var(--rgb-primary-color,255,255,255),0.05); }
       .ndc-offline { opacity: 0.45; }
-      .ndc-device-cell { display: flex; align-items: center; gap: 8px; }
       .ndc-type-icon { --mdc-icon-size: 20px; color: var(--secondary-text-color); flex-shrink: 0; }
-      .ndc-device-info { display: flex; flex-direction: column; min-width: 0; }
-      .ndc-device-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
-      .ndc-device-vendor { font-size: 0.75em; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ndc-device-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+      .ndc-device-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; font-weight: 500; }
+      .ndc-device-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
+      .ndc-meta-sub { opacity: 0.7; }
       .ndc-integrations { display: inline-flex; gap: 2px; flex-shrink: 0; }
       .ndc-int-badge { display: inline-flex; align-items: center; color: var(--primary-color, #03a9f4); opacity: 0.7; }
       .ndc-signal { font-family: monospace; white-space: nowrap; }
-      .ndc-ip { font-family: monospace; font-size: 0.9em; }
-      .ndc-net { font-size: 0.8em; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.08); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 100%; }
-      .ndc-disconnect { --mdc-icon-size: 18px; color: var(--secondary-text-color); opacity: 0.4; cursor: pointer; padding: 4px; border-radius: 4px; }
+      .ndc-ip { font-family: monospace; white-space: nowrap; }
+      .ndc-net { padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); white-space: nowrap; }
+      .ndc-disconnect { --mdc-icon-size: 16px; color: var(--secondary-text-color); opacity: 0.3; cursor: pointer; padding: 4px; border-radius: 4px; flex-shrink: 0; }
       .ndc-disconnect:hover { opacity: 1; color: var(--error-color, #f44336); background: rgba(244,67,54,0.1); }
       .ndc-no-results { color: var(--secondary-text-color); text-align: center; padding: 24px; font-style: italic; }
-      @media (max-width: 600px) {
-        .ndc { padding: 12px; }
-        .ndc-col-ip, .ndc-col-net, .ndc-col-action { display: none; }
-        .ndc-table { font-size: 0.85em; }
-        .ndc-device-name { max-width: 140px; }
-        .ndc-device-vendor { max-width: 140px; }
-      }
-      @media (max-width: 400px) {
-        .ndc-col-signal { font-size: 0.8em; }
-        .ndc-type-icon { --mdc-icon-size: 16px; }
-      }
     `;
   }
 
@@ -836,7 +814,6 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
       .rhc-clickable { cursor: pointer; border-radius: 6px; padding: 2px; margin: -2px; }
       .rhc-clickable:hover { background: rgba(var(--rgb-primary-color,255,255,255),0.05); }
-      @media (max-width: 600px) { .rhc-grid { grid-template-columns: 1fr; } }
     `;
   }
 
@@ -1445,7 +1422,6 @@ class RoamingActivityCard extends WrtManagerMixin(LitElement) {
       .roa-log-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
       .roa-log-route { display: flex; align-items: center; gap: 4px; color: var(--secondary-text-color); white-space: nowrap; margin-left: auto; }
       .roa-log-signal { font-family: monospace; font-size: 0.9em; min-width: 30px; text-align: right; }
-      @media (max-width: 600px) { .roa-log-name { max-width: 80px; } }
     `;
   }
 
