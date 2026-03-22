@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     ATTR_CONNECTED,
+    ATTR_CONNECTION_TYPE,
     ATTR_DATA_SOURCE,
     ATTR_DEVICE_TYPE,
     ATTR_HOSTNAME,
@@ -30,6 +31,7 @@ from .const import (
     CONF_ROUTER_USE_HTTPS,
     CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
+    CONNECTION_TYPE_WIFI,
     DATA_SOURCE_DYNAMIC_DHCP,
     DATA_SOURCE_STATIC_DHCP,
     DATA_SOURCE_WIFI_ONLY,
@@ -415,6 +417,9 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         for device in wifi_devices:
             mac = device[ATTR_MAC]
 
+            # Tag as WiFi device
+            device[ATTR_CONNECTION_TYPE] = CONNECTION_TYPE_WIFI
+
             # Merge DHCP data if available
             if mac in dhcp_data:
                 device.update(dhcp_data[mac])
@@ -486,7 +491,10 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         device_by_mac = {}
 
         # Group devices by MAC (same device seen on multiple routers)
+        # Skip wired devices — they have no router/AP association
         for device in devices:
+            if not device.get(ATTR_ROUTER):
+                continue
             mac = device[ATTR_MAC]
             if mac not in device_by_mac:
                 device_by_mac[mac] = []

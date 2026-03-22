@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_CONNECTED,
+    ATTR_CONNECTION_TYPE,
     ATTR_DEVICE_TYPE,
     ATTR_HOSTNAME,
     ATTR_IP,
@@ -725,15 +726,21 @@ class WrtDevicePresenceSensor(CoordinatorEntity, BinarySensorEntity):
         if not device_data:
             return {}
 
+        connection_type = device_data.get(ATTR_CONNECTION_TYPE, "wifi")
+
         attributes = {
             "mac_address": device_data.get(ATTR_MAC),
             "ip": device_data.get(ATTR_IP),
             "hostname": device_data.get(ATTR_HOSTNAME),
             "vendor": device_data.get(ATTR_VENDOR),
             "device_type": device_data.get(ATTR_DEVICE_TYPE),
-            "signal_dbm": device_data.get(ATTR_SIGNAL_DBM),
-            "roaming_count": device_data.get(ATTR_ROAMING_COUNT, 0),
+            "connection_type": connection_type,
         }
+
+        # WiFi-specific attributes
+        if connection_type == "wifi":
+            attributes["signal_dbm"] = device_data.get(ATTR_SIGNAL_DBM)
+            attributes["roaming_count"] = device_data.get(ATTR_ROAMING_COUNT, 0)
 
         # Only show router if different from primary AP (to avoid duplication)
         router = device_data.get(ATTR_ROUTER)
