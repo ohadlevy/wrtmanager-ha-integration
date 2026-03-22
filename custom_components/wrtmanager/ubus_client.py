@@ -274,6 +274,11 @@ class UbusClient:
         result = await self.call_ubus(session_id, "system", "info", {})
         return result if result else None
 
+    async def get_file_content(self, session_id: str, path: str) -> Optional[Dict[str, Any]]:
+        """Read a file via ubus file.read."""
+        result = await self.call_ubus(session_id, "file", "read", {"path": path})
+        return result if result else None
+
     def _create_ssl_context(self):
         """Create SSL context in a thread-safe manner."""
         import ssl

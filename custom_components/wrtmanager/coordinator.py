@@ -82,6 +82,9 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         self._dhcp_routers: Set[str] = set()  # Track which routers actually serve DHCP
         self._tried_dhcp: Set[str] = set()  # Track which routers we've already tested
 
+        # CPU usage tracking (requires delta between two polls)
+        self._prev_cpu_stats: Dict[str, Dict] = {}  # Router host -> previous CPU counters
+
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from all routers."""
         _LOGGER.debug("Starting data update for %d routers", len(self.routers))
@@ -285,6 +288,13 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
             if system_info:
                 system_data = {**system_info, **(system_board or {})}
+
+            # Get CPU usage from /proc/stat (requires delta between polls)
+            cpu_stat = await client.get_file_content(session_id, "/proc/stat")
+            if cpu_stat and "data" in cpu_stat:
+                cpu_usage = self._calculate_cpu_usage(host, cpu_stat["data"])
+                if cpu_usage is not None:
+                    system_data["cpu_usage"] = cpu_usage
 
             # Get network interface status
             network_interfaces = await client.get_network_interfaces(session_id)
@@ -797,6 +807,42 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             consolidated[router_host] = consolidated_router_ssids
 
         return consolidated
+
+    def _calculate_cpu_usage(self, host: str, proc_stat_content: str) -> Optional[float]:
+        """Calculate CPU usage percentage from /proc/stat content.
+
+        Parses the aggregate 'cpu' line and computes the delta between two
+        consecutive polls to derive a usage percentage.  Returns None on the
+        first call (no previous baseline available yet).
+        """
+        try:
+            first_line = proc_stat_content.split("\n")[0]
+            parts = first_line.split()
+            if not parts or parts[0] != "cpu":
+                return None
+
+            values = [int(x) for x in parts[1:]]
+            # /proc/stat columns: user nice system idle iowait irq softirq steal …
+            idle = values[3] + (values[4] if len(values) > 4 else 0)  # idle + iowait
+            total = sum(values)
+
+            prev = self._prev_cpu_stats.get(host)
+            self._prev_cpu_stats[host] = {"idle": idle, "total": total}
+
+            if prev is None:
+                return None  # First reading — no delta yet
+
+            delta_total = total - prev["total"]
+            delta_idle = idle - prev["idle"]
+
+            if delta_total <= 0:
+                return None
+
+            cpu_pct = (delta_total - delta_idle) / delta_total * 100
+            return round(max(0.0, min(100.0, cpu_pct)), 1)
+        except (ValueError, IndexError) as ex:
+            _LOGGER.warning("Failed to parse /proc/stat for %s: %s", host, ex)
+            return None
 
     def _get_frequency_bands(self, radios: List[str]) -> List[str]:
         """Get frequency bands from radio names."""
