@@ -767,6 +767,11 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
                 <ha-icon icon="mdi:thermometer" style="--mdc-icon-size: 14px;"></ha-icon>
                 ${r.temperature}\u00B0C
               </span>` : ""}
+            ${r.uptime != null ? html`
+              <span class="rhc-badge rhc-clickable" title="Router uptime" @click=${() => this.showMoreInfo(r.uptimeId)}>
+                <ha-icon icon="mdi:timer-outline" style="--mdc-icon-size: 14px;"></ha-icon>
+                ${this._formatUptime(r.uptime)}
+              </span>` : ""}
           </div>
         </div>
         <div class="rhc-clickable" title="RAM usage" @click=${() => this.showMoreInfo(r.memoryUsageId)}>
@@ -781,11 +786,6 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
               <span>${this._formatTraffic(r.trafficAttrs.total_upload_mb)}</span>
               <span class="rhc-traffic-label">since boot</span>
             </div>
-          </div>` : ""}
-        ${r.uptime != null ? html`
-          <div class="rhc-uptime rhc-clickable" title="Router uptime" @click=${() => this.showMoreInfo(r.uptimeId)}>
-            <ha-icon icon="mdi:timer-outline" style="--mdc-icon-size: 14px;"></ha-icon>
-            <span>Up ${this._formatUptime(r.uptime)}</span>
           </div>` : ""}
         ${r.swVersion ? html`<div class="rhc-version">${r.swVersion}</div>` : ""}
       </div>
@@ -831,8 +831,7 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-gauge-label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-row { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-label { font-size: 0.85em; opacity: 0.5; margin-left: auto; }
-      .rhc-uptime { display: flex; align-items: center; gap: 4px; font-size: 0.8em; color: var(--secondary-text-color); }
-      .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
+.rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
       .rhc-clickable { cursor: pointer; border-radius: 6px; padding: 2px; margin: -2px; }
       .rhc-clickable:hover { background: rgba(var(--rgb-primary-color,255,255,255),0.05); }
     `;
