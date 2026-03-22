@@ -831,7 +831,7 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-gauge-label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-row { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-label { font-size: 0.85em; opacity: 0.5; margin-left: auto; }
-.rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
+      .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
       .rhc-clickable { cursor: pointer; border-radius: 6px; padding: 2px; margin: -2px; }
       .rhc-clickable:hover { background: rgba(var(--rgb-primary-color,255,255,255),0.05); }
     `;
