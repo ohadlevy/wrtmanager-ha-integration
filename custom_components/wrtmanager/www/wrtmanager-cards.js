@@ -630,6 +630,8 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       const tempId = `sensor.${prefix}_temperature`;
       const temp = this.hass.states[tempId];
       const traffic = this.hass.states[`sensor.${prefix}_total_traffic`];
+      const uptimeId = `sensor.${prefix}_uptime`;
+      const uptime = this.hass.states[uptimeId];
 
       let haDevice = null;
       let routerHost = null;
@@ -679,6 +681,9 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         totalTraffic: parseState(traffic),
         trafficId: traffic ? `sensor.${prefix}_total_traffic` : null,
         trafficAttrs: traffic?.attributes || {},
+        uptime: uptime && uptime.state !== "unavailable" && uptime.state !== "unknown" ? Number(uptime.state) : null,
+        uptimeId: uptime ? uptimeId : null,
+        uptimeAttrs: uptime?.attributes || {},
         model: haDevice?.model || state.attributes.model || "",
         swVersion: haDevice?.sw_version || state.attributes.sw_version || "",
         haDeviceId: haDevice?.id || null,
@@ -701,6 +706,16 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
     if (temp < 60) return "#4caf50";
     if (temp < 75) return "#ff9800";
     return "#f44336";
+  }
+
+  _formatUptime(seconds) {
+    if (seconds == null) return "-";
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
   }
 
   _formatTraffic(mb) {
@@ -767,6 +782,11 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
               <span class="rhc-traffic-label">since boot</span>
             </div>
           </div>` : ""}
+        ${r.uptime != null ? html`
+          <div class="rhc-uptime rhc-clickable" title="Router uptime" @click=${() => this.showMoreInfo(r.uptimeId)}>
+            <ha-icon icon="mdi:timer-outline" style="--mdc-icon-size: 14px;"></ha-icon>
+            <span>Up ${this._formatUptime(r.uptime)}</span>
+          </div>` : ""}
         ${r.swVersion ? html`<div class="rhc-version">${r.swVersion}</div>` : ""}
       </div>
     `;
@@ -811,6 +831,7 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-gauge-label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-row { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-label { font-size: 0.85em; opacity: 0.5; margin-left: auto; }
+      .rhc-uptime { display: flex; align-items: center; gap: 4px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
       .rhc-clickable { cursor: pointer; border-radius: 6px; padding: 2px; margin: -2px; }
       .rhc-clickable:hover { background: rgba(var(--rgb-primary-color,255,255,255),0.05); }
