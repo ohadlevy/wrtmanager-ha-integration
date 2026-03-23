@@ -141,3 +141,29 @@ ieee-oui36.txt
 local_settings.py
 test_credentials.jsonopenwrt_data_validation.json
 bandit-report.json
+
+# E2E test infrastructure (per-worktree state files)
+.ha-test-config/
+.ha-test-state.json
+.dev-env-state.json
+.mock-ports.json
+.mock-server.pid
+.mock-server.log
+.ha-token
+.test-screenshots/
+.review-screenshots/
+.review-result.md
+.claude-debug.log
+
+# Claude Code
+.claude/logs/
+.claude/worktrees/
+.claude/run-suggestions.md
+.claude/runs.db
+.claude/runs.db-wal
+.claude/runs.db-shm
+.claude-resume-prompt.md
+
+# Node (Playwright)
+node_modules/
+package-lock.json

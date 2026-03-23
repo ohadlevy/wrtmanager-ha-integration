@@ -1,0 +1,506 @@
+{
+  "description": "Multi-router home network with 3 APs, IoT devices, mobile clients, and roaming",
+  "routers": {
+    "router1": {
+      "name": "Main Router",
+      "host": "10.99.0.1",
+      "model": "Linksys E8450",
+      "is_dhcp_server": true,
+      "system_board": {
+        "kernel": "5.15.150",
+        "hostname": "main-router",
+        "system": "MediaTek MT7622BV",
+        "model": "Linksys E8450",
+        "board_name": "linksys,e8450",
+        "release": {
+          "distribution": "OpenWrt",
+          "version": "23.05.3",
+          "revision": "r24076-4b684d2541",
+          "target": "mediatek/mt7622",
+          "description": "OpenWrt 23.05.3 r24076-4b684d2541"
+        }
+      },
+      "system_info": {
+        "uptime": 864000,
+        "localtime": 1711100000,
+        "load": [2048, 4096, 3072],
+        "memory": {
+          "total": 524288000,
+          "free": 262144000,
+          "shared": 8192000,
+          "buffered": 32768000,
+          "available": 384000000,
+          "cached": 128000000
+        },
+        "swap": {
+          "total": 0,
+          "free": 0
+        }
+      },
+      "wireless_devices": ["phy0-ap0", "phy0-ap1", "phy1-ap0", "phy1-ap1"],
+      "wireless_status": {
+        "radio0": {
+          "up": true,
+          "pending": false,
+          "autostart": true,
+          "disabled": false,
+          "config": {
+            "channel": 6,
+            "htmode": "HE40",
+            "band": "2g",
+            "path": "platform/18000000.wmac"
+          },
+          "interfaces": [
+            {
+              "section": "default_radio0",
+              "ifname": "phy0-ap0",
+              "config": {
+                "mode": "ap",
+                "ssid": "HomeNet",
+                "encryption": "sae-mixed",
+                "key": "supersecret123",
+                "network": ["lan"],
+                "disabled": false
+              }
+            },
+            {
+              "section": "guest_radio0",
+              "ifname": "phy0-ap1",
+              "config": {
+                "mode": "ap",
+                "ssid": "HomeNet-Guest",
+                "encryption": "sae",
+                "key": "guestpass456",
+                "network": ["guest"],
+                "isolate": true,
+                "disabled": false
+              }
+            }
+          ]
+        },
+        "radio1": {
+          "up": true,
+          "pending": false,
+          "autostart": true,
+          "disabled": false,
+          "config": {
+            "channel": 36,
+            "htmode": "HE80",
+            "band": "5g",
+            "path": "platform/18000000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0"
+          },
+          "interfaces": [
+            {
+              "section": "default_radio1",
+              "ifname": "phy1-ap0",
+              "config": {
+                "mode": "ap",
+                "ssid": "HomeNet",
+                "encryption": "sae-mixed",
+                "key": "supersecret123",
+                "network": ["lan"],
+                "disabled": false
+              }
+            },
+            {
+              "section": "guest_radio1",
+              "ifname": "phy1-ap1",
+              "config": {
+                "mode": "ap",
+                "ssid": "HomeNet-Guest",
+                "encryption": "sae",
+                "key": "guestpass456",
+                "network": ["guest"],
+                "isolate": true,
+                "disabled": false
+              }
+            }
+          ]
+        }
+      },
+      "network_device_status": {
+        "br-lan": {
+          "type": "bridge",
+          "up": true,
+          "carrier": true,
+          "statistics": {
+            "rx_bytes": 52428800000,
+            "tx_bytes": 26214400000,
+            "rx_packets": 40000000,
+            "tx_packets": 20000000,
+            "rx_errors": 0,
+            "tx_errors": 0
+          }
+        },
+        "eth0": {
+          "type": "ethernet",
+          "up": true,
+          "carrier": true,
+          "statistics": {
+            "rx_bytes": 104857600000,
+            "tx_bytes": 52428800000,
+            "rx_packets": 80000000,
+            "tx_packets": 40000000,
+            "rx_errors": 2,
+            "tx_errors": 0
+          }
+        }
+      },
+      "dhcp_leases": [
+        {"macaddr": "4C:FC:AA:13:D0:65", "ipaddr": "192.168.1.169", "hostname": "Tesla_Model_3", "expires": 42836},
+        {"macaddr": "9A:50:0E:F2:D4:45", "ipaddr": "192.168.1.195", "hostname": "MacBookAir", "expires": 43134},
+        {"macaddr": "4E:5C:42:0D:BB:1D", "ipaddr": "192.168.1.220", "hostname": "iPhone-Tom", "expires": 41719},
+        {"macaddr": "3A:9B:9B:49:EB:4E", "ipaddr": "192.168.1.144", "hostname": "Galaxy-A25", "expires": 42819},
+        {"macaddr": "84:0F:4C:20:A5:21", "ipaddr": "192.168.1.245", "hostname": "iPhone-Dana", "expires": 42961},
+        {"macaddr": "98:5F:D3:1A:5B:FE", "ipaddr": "192.168.1.204", "hostname": "XBOXONE", "expires": 20782},
+        {"macaddr": "70:C9:32:09:98:76", "ipaddr": "192.168.1.110", "hostname": "dreame_vacuum", "expires": 40172},
+        {"macaddr": "7C:2E:BD:24:37:6F", "ipaddr": "192.168.1.213", "hostname": "Google-Home-Mini", "expires": 42692},
+        {"macaddr": "94:9F:3E:0F:27:74", "ipaddr": "192.168.1.193", "hostname": "SonosZP", "expires": 39098},
+        {"macaddr": "A0:92:08:B6:FE:FA", "ipaddr": "192.168.1.219", "hostname": "ac-salon", "expires": 30247},
+        {"macaddr": "A0:92:08:B7:1C:36", "ipaddr": "192.168.1.156", "hostname": "ac-parents", "expires": 39487},
+        {"macaddr": "CC:8C:BF:0A:B7:F4", "ipaddr": "192.168.1.214", "hostname": "ac-basement", "expires": 36259},
+        {"macaddr": "C8:47:8C:10:3D:CA", "ipaddr": "192.168.1.246", "hostname": "switch-garden-water", "expires": 36624},
+        {"macaddr": "EC:FA:BC:C4:E9:D1", "ipaddr": "192.168.5.169", "hostname": "shelly1-C4E9D1", "expires": 23130},
+        {"macaddr": "A4:CF:12:BA:3E:AE", "ipaddr": "192.168.5.120", "hostname": "shelly1-BA3EAE", "expires": 24108},
+        {"macaddr": "54:32:04:63:19:A0", "ipaddr": "192.168.5.114", "hostname": "shelly1minig3", "expires": 24769},
+        {"macaddr": "DC:4F:22:76:49:8E", "ipaddr": "192.168.5.212", "hostname": "shellyem3-energy", "expires": 29707},
+        {"macaddr": "4C:82:A9:DF:EF:43", "ipaddr": "192.168.1.189", "hostname": "BrotherPrinter", "expires": 42491},
+        {"macaddr": "C8:5A:CF:81:57:02", "ipaddr": "192.168.1.229", "hostname": "HP-Laptop", "expires": 26270},
+        {"macaddr": "20:0B:74:03:91:96", "ipaddr": "192.168.1.180", "hostname": "Desktop-PC", "expires": 30442}
+      ],
+      "static_dhcp_hosts": {
+        "values": {
+          "cfg_host1": {
+            ".type": "host",
+            "mac": "DC:A6:32:D9:75:66",
+            "ip": "192.168.1.10",
+            "name": "homeassistant"
+          },
+          "cfg_host2": {
+            ".type": "host",
+            "mac": "F4:9D:8A:83:8F:7D",
+            "ip": "192.168.1.20",
+            "name": "anker-solix"
+          },
+          "cfg_host3": {
+            ".type": "host",
+            "mac": "28:B7:7C:1E:A6:C9",
+            "ip": "192.168.1.30",
+            "name": "solaredge"
+          },
+          "cfg_dnsmasq": {
+            ".type": "dnsmasq",
+            "option": "log-queries"
+          }
+        }
+      },
+      "associations": {
+        "phy0-ap0": [
+          {"mac": "70:C9:32:09:98:76", "signal": -52, "rx": {"rate": 72200}, "tx": {"rate": 72200}},
+          {"mac": "A0:92:08:B6:FE:FA", "signal": -41, "rx": {"rate": 24000}, "tx": {"rate": 24000}},
+          {"mac": "A0:92:08:B7:1C:36", "signal": -55, "rx": {"rate": 24000}, "tx": {"rate": 24000}},
+          {"mac": "CC:8C:BF:0A:B7:F4", "signal": -48, "rx": {"rate": 24000}, "tx": {"rate": 24000}},
+          {"mac": "7C:2E:BD:24:37:6F", "signal": -39, "rx": {"rate": 65000}, "tx": {"rate": 72200}}
+        ],
+        "phy0-ap1": [
+          {"mac": "2E:34:E7:D0:21:AA", "signal": -63, "rx": {"rate": 24000}, "tx": {"rate": 48000}}
+        ],
+        "phy1-ap0": [
+          {"mac": "9A:50:0E:F2:D4:45", "signal": -35, "rx": {"rate": 866700}, "tx": {"rate": 866700}},
+          {"mac": "4E:5C:42:0D:BB:1D", "signal": -42, "rx": {"rate": 585000}, "tx": {"rate": 585000}},
+          {"mac": "98:5F:D3:1A:5B:FE", "signal": -38, "rx": {"rate": 866700}, "tx": {"rate": 866700}},
+          {"mac": "94:9F:3E:0F:27:74", "signal": -44, "rx": {"rate": 433300}, "tx": {"rate": 433300}}
+        ],
+        "phy1-ap1": []
+      }
+    },
+    "router2": {
+      "name": "AP Kitchen",
+      "host": "10.99.0.2",
+      "model": "GL.iNet GL-MT3000",
+      "is_dhcp_server": false,
+      "system_board": {
+        "kernel": "5.15.150",
+        "hostname": "ap-kitchen",
+        "system": "MediaTek MT7981B",
+        "model": "GL.iNet GL-MT3000",
+        "board_name": "glinet,gl-mt3000",
+        "release": {
+          "distribution": "OpenWrt",
+          "version": "23.05.3",
+          "revision": "r24076-4b684d2541",
+          "target": "mediatek/filogic",
+          "description": "OpenWrt 23.05.3 r24076-4b684d2541"
+        }
+      },
+      "system_info": {
+        "uptime": 432000,
+        "localtime": 1711100000,
+        "load": [1024, 2048, 1536],
+        "memory": {
+          "total": 262144000,
+          "free": 131072000,
+          "shared": 4096000,
+          "buffered": 16384000,
+          "available": 192000000,
+          "cached": 64000000
+        },
+        "swap": {"total": 0, "free": 0}
+      },
+      "wireless_devices": ["phy0-ap0", "phy1-ap0"],
+      "wireless_status": {
+        "radio0": {
+          "up": true,
+          "pending": false,
+          "autostart": true,
+          "disabled": false,
+          "config": {
+            "channel": 1,
+            "htmode": "HE40",
+            "band": "2g"
+          },
+          "interfaces": [
+            {
+              "section": "default_radio0",
+              "ifname": "phy0-ap0",
+              "config": {
+                "mode": "ap",
+                "ssid": "HomeNet",
+                "encryption": "sae-mixed",
+                "key": "supersecret123",
+                "network": ["lan"],
+                "disabled": false
+              }
+            }
+          ]
+        },
+        "radio1": {
+          "up": true,
+          "pending": false,
+          "autostart": true,
+          "disabled": false,
+          "config": {
+            "channel": 149,
+            "htmode": "HE80",
+            "band": "5g"
+          },
+          "interfaces": [
+            {
+              "section": "default_radio1",
+              "ifname": "phy1-ap0",
+              "config": {
+                "mode": "ap",
+                "ssid": "HomeNet",
+                "encryption": "sae-mixed",
+                "key": "supersecret123",
+                "network": ["lan"],
+                "disabled": false
+              }
+            }
+          ]
+        }
+      },
+      "network_device_status": {
+        "br-lan": {
+          "type": "bridge",
+          "up": true,
+          "carrier": true,
+          "statistics": {
+            "rx_bytes": 10485760000,
+            "tx_bytes": 5242880000,
+            "rx_packets": 8000000,
+            "tx_packets": 4000000,
+            "rx_errors": 0,
+            "tx_errors": 0
+          }
+        }
+      },
+      "associations": {
+        "phy0-ap0": [
+          {"mac": "EC:FA:BC:C4:E9:D1", "signal": -47, "rx": {"rate": 24000}, "tx": {"rate": 24000}},
+          {"mac": "A4:CF:12:BA:3E:AE", "signal": -52, "rx": {"rate": 24000}, "tx": {"rate": 24000}},
+          {"mac": "C8:47:8C:10:3D:CA", "signal": -44, "rx": {"rate": 24000}, "tx": {"rate": 24000}}
+        ],
+        "phy1-ap0": [
+          {"mac": "84:0F:4C:20:A5:21", "signal": -51, "rx": {"rate": 585000}, "tx": {"rate": 585000}},
+          {"mac": "3A:9B:9B:49:EB:4E", "signal": -49, "rx": {"rate": 433300}, "tx": {"rate": 433300}}
+        ]
+      }
+    },
+    "router3": {
+      "name": "AP Basement",
+      "host": "10.99.0.3",
+      "model": "TP-Link Archer C7",
+      "is_dhcp_server": false,
+      "system_board": {
+        "kernel": "5.15.150",
+        "hostname": "ap-basement",
+        "system": "Qualcomm Atheros QCA9558",
+        "model": "TP-Link Archer C7 v5",
+        "board_name": "tplink,archer-c7-v5",
+        "release": {
+          "distribution": "OpenWrt",
+          "version": "23.05.3",
+          "revision": "r24076-4b684d2541",
+          "target": "ath79/generic",
+          "description": "OpenWrt 23.05.3 r24076-4b684d2541"
+        }
+      },
+      "system_info": {
+        "uptime": 172800,
+        "localtime": 1711100000,
+        "load": [512, 1024, 768],
+        "memory": {
+          "total": 131072000,
+          "free": 32768000,
+          "shared": 2048000,
+          "buffered": 8192000,
+          "available": 64000000,
+          "cached": 32000000
+        },
+        "swap": {"total": 0, "free": 0}
+      },
+      "wireless_devices": ["phy0-ap0", "phy1-ap0"],
+      "wireless_status": {
+        "radio0": {
+          "up": true,
+          "pending": false,
+          "autostart": true,
+          "disabled": false,
+          "config": {
+            "channel": 11,
+            "htmode": "HT40",
+            "band": "2g"
+          },
+          "interfaces": [
+            {
+              "section": "default_radio0",
+              "ifname": "phy0-ap0",
+              "config": {
+                "mode": "ap",
+                "ssid": "HomeNet",
+                "encryption": "sae-mixed",
+                "key": "supersecret123",
+                "network": ["lan"],
+                "disabled": false
+              }
+            }
+          ]
+        },
+        "radio1": {
+          "up": true,
+          "pending": false,
+          "autostart": true,
+          "disabled": false,
+          "config": {
+            "channel": 44,
+            "htmode": "VHT80",
+            "band": "5g"
+          },
+          "interfaces": [
+            {
+              "section": "default_radio1",
+              "ifname": "phy1-ap0",
+              "config": {
+                "mode": "ap",
+                "ssid": "HomeNet",
+                "encryption": "sae-mixed",
+                "key": "supersecret123",
+                "network": ["lan"],
+                "disabled": false
+              }
+            }
+          ]
+        }
+      },
+      "network_device_status": {
+        "br-lan": {
+          "type": "bridge",
+          "up": true,
+          "carrier": true,
+          "statistics": {
+            "rx_bytes": 5242880000,
+            "tx_bytes": 2621440000,
+            "rx_packets": 4000000,
+            "tx_packets": 2000000,
+            "rx_errors": 0,
+            "tx_errors": 0
+          }
+        }
+      },
+      "associations": {
+        "phy0-ap0": [
+          {"mac": "54:32:04:63:19:A0", "signal": -61, "rx": {"rate": 24000}, "tx": {"rate": 24000}},
+          {"mac": "DC:4F:22:76:49:8E", "signal": -55, "rx": {"rate": 24000}, "tx": {"rate": 24000}}
+        ],
+        "phy1-ap0": [
+          {"mac": "4C:FC:AA:13:D0:65", "signal": -68, "rx": {"rate": 433300}, "tx": {"rate": 433300}},
+          {"mac": "20:0B:74:03:91:96", "signal": -45, "rx": {"rate": 866700}, "tx": {"rate": 866700}}
+        ]
+      }
+    }
+  },
+  "time_events": [
+    {
+      "description": "iPhone-Dana roams from router2 to router1 (walks from kitchen to living room)",
+      "at_seconds": 30,
+      "action": "roam",
+      "mac": "84:0F:4C:20:A5:21",
+      "from_router": "router2",
+      "from_interface": "phy1-ap0",
+      "to_router": "router1",
+      "to_interface": "phy1-ap0",
+      "new_signal": -40
+    },
+    {
+      "description": "Galaxy-A25 disconnects (leaves home)",
+      "at_seconds": 60,
+      "action": "disconnect",
+      "mac": "3A:9B:9B:49:EB:4E",
+      "router": "router2",
+      "interface": "phy1-ap0"
+    },
+    {
+      "description": "New device connects to guest network (visitor arrives)",
+      "at_seconds": 90,
+      "action": "connect",
+      "mac": "DE:AD:BE:EF:00:01",
+      "router": "router1",
+      "interface": "phy1-ap1",
+      "signal": -55,
+      "dhcp_lease": {
+        "ipaddr": "192.168.10.50",
+        "hostname": "Visitor-Phone"
+      }
+    },
+    {
+      "description": "MacBookAir roams from router1 to router3 (goes to basement office)",
+      "at_seconds": 120,
+      "action": "roam",
+      "mac": "9A:50:0E:F2:D4:45",
+      "from_router": "router1",
+      "from_interface": "phy1-ap0",
+      "to_router": "router3",
+      "to_interface": "phy1-ap0",
+      "new_signal": -38
+    },
+    {
+      "description": "Signal strength fluctuation on vacuum",
+      "at_seconds": 150,
+      "action": "signal_change",
+      "mac": "70:C9:32:09:98:76",
+      "router": "router1",
+      "interface": "phy0-ap0",
+      "new_signal": -65
+    },
+    {
+      "description": "Galaxy-A25 reconnects (comes back home, different AP)",
+      "at_seconds": 180,
+      "action": "connect",
+      "mac": "3A:9B:9B:49:EB:4E",
+      "router": "router3",
+      "interface": "phy1-ap0",
+      "signal": -47
+    }
+  ]
+}
