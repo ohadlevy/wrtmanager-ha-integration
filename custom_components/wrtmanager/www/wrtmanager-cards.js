@@ -628,6 +628,9 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
 
       const deviceCount = this.hass.states[deviceCountId];
       const memFree = this.hass.states[`sensor.${prefix}_memory_free`];
+      const load1m = this.hass.states[`sensor.${prefix}_load_average_1m`];
+      const load5m = this.hass.states[`sensor.${prefix}_load_average_5m`];
+      const load15m = this.hass.states[`sensor.${prefix}_load_average_15m`];
       const tempId = `sensor.${prefix}_temperature`;
       const temp = this.hass.states[tempId];
       const traffic = this.hass.states[`sensor.${prefix}_total_traffic`];
@@ -685,6 +688,10 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         uptime: uptime && uptime.state !== "unavailable" && uptime.state !== "unknown" ? Number(uptime.state) : null,
         uptimeId: uptime ? uptimeId : null,
         uptimeAttrs: uptime?.attributes || {},
+        load1m: parseState(load1m),
+        load5m: parseState(load5m),
+        load15m: parseState(load15m),
+        load1mId: load1m ? `sensor.${prefix}_load_average_1m` : null,
         model: haDevice?.model || state.attributes.model || "",
         swVersion: haDevice?.sw_version || state.attributes.sw_version || "",
         haDeviceId: haDevice?.id || null,
@@ -699,6 +706,13 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
     if (pct == null) return "var(--secondary-text-color)";
     if (pct < 60) return "#4caf50";
     if (pct < 80) return "#ff9800";
+    return "#f44336";
+  }
+
+  _loadColor(val) {
+    if (val == null) return "var(--secondary-text-color)";
+    if (val < 0.5) return "#4caf50";
+    if (val < 1.0) return "#ff9800";
     return "#f44336";
   }
 
@@ -735,6 +749,26 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         <div class="rhc-gauge-label">
           <span>${label}</span>
           <span style="color: ${color}">${value != null ? `${value}${unit}` : "-"}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderLoadRow(r) {
+    const color = this._loadColor(r.load1m);
+    const pct = r.load1m != null ? Math.min((r.load1m / 2.0) * 100, 100) : 0;
+    return html`
+      <div class="rhc-gauge">
+        <div class="rhc-gauge-bar">
+          <div class="rhc-gauge-fill" style="width: ${pct}%; background: ${color};"></div>
+        </div>
+        <div class="rhc-gauge-label">
+          <span>Load</span>
+          <span>
+            <span style="color: ${color}">${r.load1m != null ? r.load1m : "-"}</span>
+            ${r.load5m != null ? html`<span class="rhc-load-secondary">&nbsp;5m&nbsp;${r.load5m}</span>` : ""}
+            ${r.load15m != null ? html`<span class="rhc-load-secondary">&nbsp;15m&nbsp;${r.load15m}</span>` : ""}
+          </span>
         </div>
       </div>
     `;
@@ -778,6 +812,10 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
         <div class="rhc-clickable" title="RAM usage" @click=${() => this.showMoreInfo(r.memoryUsageId)}>
           ${this._renderGauge(r.memoryUsage, 100, this._memoryColor(r.memoryUsage), "Memory", "%")}
         </div>
+        ${r.load1m != null ? html`
+          <div class="rhc-clickable" title="Load average" @click=${() => this.showMoreInfo(r.load1mId)}>
+            ${this._renderLoadRow(r)}
+          </div>` : ""}
         ${r.totalTraffic != null ? html`
           <div class="rhc-traffic rhc-clickable" title="Cumulative traffic since router boot" @click=${() => this.showMoreInfo(r.trafficId)}>
             <div class="rhc-traffic-row">
@@ -830,6 +868,7 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-gauge-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
       .rhc-gauge-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
       .rhc-gauge-label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--secondary-text-color); }
+      .rhc-load-secondary { font-size: 0.85em; color: var(--secondary-text-color); }
       .rhc-traffic-row { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--secondary-text-color); }
       .rhc-traffic-label { font-size: 0.85em; opacity: 0.5; margin-left: auto; }
       .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
@@ -1465,7 +1504,7 @@ customElements.define("roaming-activity-card-editor", RoamingActivityCardEditor)
 window.customCards = window.customCards || [];
 window.customCards.push(
   { type: "network-devices-card", name: "Network Devices", description: "WiFi devices grouped by access point with HA cross-linking", preview: true },
-  { type: "router-health-card", name: "Router Health", description: "Router health overview with memory, devices, temperature, traffic", preview: true },
+  { type: "router-health-card", name: "Router Health", description: "Router health overview with memory, load, devices, temperature, traffic", preview: true },
   { type: "network-topology-card", name: "Network Topology", description: "Visual network topology with signal quality color coding", preview: true },
   { type: "signal-heatmap-card", name: "Signal Heatmap", description: "Signal strength list with quality filtering and sorting", preview: true },
   { type: "roaming-activity-card", name: "Roaming Activity", description: "Track device roaming between access points with live event log", preview: true },
