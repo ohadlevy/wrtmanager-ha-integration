@@ -15,7 +15,6 @@ def test_primary_ap_attribute_set_on_device():
     """Test that _update_roaming_detection sets ATTR_PRIMARY_AP from ATTR_ROUTER."""
     coordinator = Mock(spec=WrtManagerCoordinator)
     coordinator._device_history = {}
-    coordinator._device_history = {}
 
     router_host = "host.containers.internal:18001"
     device = {
@@ -23,7 +22,6 @@ def test_primary_ap_attribute_set_on_device():
         ATTR_ROUTER: router_host,
     }
 
-    # Call the real method on a real coordinator instance via direct logic
     # Replicate what _update_roaming_detection does for a single-router device
     devices = [device]
     mac_to_devices = {}
