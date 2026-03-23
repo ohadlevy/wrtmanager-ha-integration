@@ -134,6 +134,36 @@ test.describe('WrtManager Dashboard Cards', () => {
     );
   });
 
+  test('network-topology-card renders', async ({ page }, testInfo) => {
+    await page.goto(`${HA_URL}/lovelace/network`);
+    await page.waitForTimeout(5000);
+    await screenshotCard(
+      page,
+      'network-topology-card',
+      path.join(SCREENSHOT_DIR, `network-topology-${testInfo.project.name}.png`),
+    );
+  });
+
+  test('signal-heatmap-card renders', async ({ page }, testInfo) => {
+    await page.goto(`${HA_URL}/lovelace/network`);
+    await page.waitForTimeout(5000);
+    await screenshotCard(
+      page,
+      'signal-heatmap-card',
+      path.join(SCREENSHOT_DIR, `signal-heatmap-${testInfo.project.name}.png`),
+    );
+  });
+
+  test('roaming-activity-card renders', async ({ page }, testInfo) => {
+    await page.goto(`${HA_URL}/lovelace/network`);
+    await page.waitForTimeout(5000);
+    await screenshotCard(
+      page,
+      'roaming-activity-card',
+      path.join(SCREENSHOT_DIR, `roaming-activity-${testInfo.project.name}.png`),
+    );
+  });
+
   test('no console errors on dashboard', async ({ page }, testInfo) => {
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
