@@ -541,6 +541,48 @@ PRBODYEOF
 
     if [[ -n "$PR_NUMBER" ]]; then
         $VENV "$REGISTRY" update "$RUN_ID" --pr-number "$PR_NUMBER" --pr-url "$PR_URL"
+
+        # Upload screenshots to orphan branch and add PR comment
+        SCREENSHOT_DIR="$WORKTREE_PATH/.test-screenshots"
+        if ls "$SCREENSHOT_DIR"/*-desktop.png &>/dev/null; then
+            echo "Uploading screenshots to PR #$PR_NUMBER..."
+            REPO_SLUG=$(cd "$WORKTREE_PATH" && gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || echo "")
+            if [[ -n "$REPO_SLUG" ]]; then
+                SS_TMPDIR=$(mktemp -d)
+                git clone --single-branch --branch screenshots \
+                    "$(git -C "$WORKTREE_PATH" remote get-url origin)" "$SS_TMPDIR" 2>/dev/null || true
+                if [[ -d "$SS_TMPDIR/.git" ]]; then
+                    mkdir -p "$SS_TMPDIR/pr-${PR_NUMBER}"
+                    cp "$SCREENSHOT_DIR"/*-desktop.png "$SS_TMPDIR/pr-${PR_NUMBER}/"
+                    git -C "$SS_TMPDIR" add "pr-${PR_NUMBER}/"
+                    git -C "$SS_TMPDIR" commit -m "Add screenshots for PR #${PR_NUMBER}" --no-verify 2>/dev/null || true
+                    git -C "$SS_TMPDIR" push 2>/dev/null || true
+
+                    # Build image markdown
+                    SS_IMAGES=""
+                    for img in "$SS_TMPDIR/pr-${PR_NUMBER}"/*.png; do
+                        IMG_NAME=$(basename "$img" .png | sed 's/-desktop$//' | sed 's/-/ /g')
+                        IMG_FILE=$(basename "$img")
+                        SS_IMAGES+="### ${IMG_NAME}
+![${IMG_NAME}](https://raw.githubusercontent.com/${REPO_SLUG}/screenshots/pr-${PR_NUMBER}/${IMG_FILE})
+
+"
+                    done
+
+                    REVIEW_BODY=$(cat "$REVIEW_FILE" 2>/dev/null | tail -n +2 || echo "")
+                    cd "$WORKTREE_PATH" && gh pr comment "$PR_NUMBER" \
+                        --body "$(cat <<SSEOF
+## Automated Visual Review: ${REVIEW_VERDICT}
+
+${REVIEW_BODY}
+
+${SS_IMAGES}
+SSEOF
+)" 2>/dev/null && echo "Review comment with screenshots added to PR" || true
+                fi
+                rm -rf "$SS_TMPDIR"
+            fi
+        fi
     fi
 else
     echo ""

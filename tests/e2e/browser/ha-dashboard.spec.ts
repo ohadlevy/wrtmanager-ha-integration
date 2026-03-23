@@ -82,6 +82,24 @@ async function loginToHA(page: Page) {
   await page.waitForTimeout(5000);
 }
 
+/**
+ * Screenshot a specific custom card element, falling back to full page.
+ * HA wraps cards in hui-card elements, so we look for the custom element inside.
+ */
+async function screenshotCard(page: Page, cardTag: string, screenshotPath: string) {
+  try {
+    // HA renders custom cards inside the shadow DOM of hui-card elements.
+    // Use a broad locator and filter by the card tag presence.
+    const card = page.locator(cardTag).first();
+    await card.waitFor({ state: 'visible', timeout: 10000 });
+    await card.screenshot({ path: screenshotPath });
+  } catch {
+    // Fallback: full page screenshot if card element not found
+    console.warn(`Card element '${cardTag}' not found, taking full page screenshot`);
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+  }
+}
+
 test.describe('WrtManager Dashboard Cards', () => {
   test.beforeEach(async ({ page }) => {
     await loginToHA(page);
@@ -99,19 +117,21 @@ test.describe('WrtManager Dashboard Cards', () => {
   test('router-health-card renders', async ({ page }, testInfo) => {
     await page.goto(`${HA_URL}/lovelace/network`);
     await page.waitForTimeout(5000);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, `router-health-${testInfo.project.name}.png`),
-      fullPage: true,
-    });
+    await screenshotCard(
+      page,
+      'router-health-card',
+      path.join(SCREENSHOT_DIR, `router-health-${testInfo.project.name}.png`),
+    );
   });
 
   test('network-devices-card renders', async ({ page }, testInfo) => {
     await page.goto(`${HA_URL}/lovelace/network`);
     await page.waitForTimeout(5000);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, `network-devices-${testInfo.project.name}.png`),
-      fullPage: true,
-    });
+    await screenshotCard(
+      page,
+      'network-devices-card',
+      path.join(SCREENSHOT_DIR, `network-devices-${testInfo.project.name}.png`),
+    );
   });
 
   test('no console errors on dashboard', async ({ page }, testInfo) => {
