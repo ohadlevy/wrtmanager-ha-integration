@@ -78,6 +78,9 @@ async def async_setup_entry(
                 WrtManagerUptimeSensor(coordinator, router_host, router_name),
                 WrtManagerMemoryUsageSensor(coordinator, router_host, router_name),
                 WrtManagerMemoryFreeSensor(coordinator, router_host, router_name),
+                WrtManagerLoadAverageSensor(coordinator, router_host, router_name, 0, "1m"),
+                WrtManagerLoadAverageSensor(coordinator, router_host, router_name, 1, "5m"),
+                WrtManagerLoadAverageSensor(coordinator, router_host, router_name, 2, "15m"),
             ]
         )
 
@@ -440,6 +443,38 @@ class WrtManagerTemperatureSensor(WrtManagerSensorBase):
     def available(self) -> bool:
         """Return if temperature is available."""
         return super().available and self._get_system_data().get("temperature") is not None
+
+
+class WrtManagerLoadAverageSensor(WrtManagerSensorBase):
+    """Sensor for router load average (1m, 5m, or 15m)."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        router_host: str,
+        router_name: str,
+        index: int,
+        label: str,
+    ):
+        """Initialize the load average sensor."""
+        super().__init__(
+            coordinator,
+            router_host,
+            router_name,
+            f"load_average_{label}",
+            f"Load Average {label}",
+        )
+        self._index = index
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:gauge"
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return load average value (fixed-point divided by 65536)."""
+        load = self._get_system_data().get("load", [])
+        if len(load) <= self._index:
+            return None
+        return round(load[self._index] / 65536, 2)
 
 
 class WrtManagerDeviceCountSensor(WrtManagerSensorBase):
