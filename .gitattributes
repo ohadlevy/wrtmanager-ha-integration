@@ -1,0 +1,14 @@
+dev/ export-ignore
+tests/ export-ignore
+.claude/ export-ignore
+.flake8 export-ignore
+.pre-commit-config.yaml export-ignore
+pyproject.toml export-ignore
+pytest.ini export-ignore
+requirements.txt export-ignore
+Makefile export-ignore
+CONTRIBUTING.md export-ignore
+PROJECT_PLAN.md export-ignore
+scripts/ export-ignore
+docs/ export-ignore
+examples/ export-ignore
