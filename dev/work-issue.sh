@@ -143,6 +143,19 @@ For each file: path + line range, what to change, key code snippet showing the p
 ## UI changes (if any)
 Where in existing card/layout, NOT new sections. Color/unit/format decisions.
 
+MUST include an ASCII visual mockup showing the card layout. Example:
+\`\`\`
+┌─ Router Health ──────────────────────────┐
+│  🖧 Main Router              📶 11  ⏱ 10d│
+│    Linksys E8450                         │
+│  Memory  ████████████░░░░░  59.5%        │
+│  Load    ████░░░░░░░░░░░░░  0.52         │
+│          5m 0.35  15m 0.24               │
+│  ↓ 146.5 GB  ↑ 73.2 GB     since boot   │
+│                                  23.05.3 │
+└──────────────────────────────────────────┘
+\`\`\`
+
 ## Data flow
 ubus call → coordinator field → sensor entity → card display. Field names and types.
 
@@ -155,6 +168,7 @@ Out of scope items.
 ### Rules
 - Base plan on actual code, not assumptions
 - Be specific: line numbers, function names, variable names
+- UI changes MUST include ASCII visual mockup of the card layout
 - UI changes MUST integrate into existing sections
 - Smallest change that solves the issue
 - Do NOT implement, only plan
