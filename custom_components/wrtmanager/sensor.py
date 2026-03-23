@@ -84,11 +84,7 @@ async def async_setup_entry(
             ]
         )
 
-        # Only add temperature sensor if router provides temperature data
-        if coordinator.data and "system_info" in coordinator.data:
-            system_data = coordinator.data["system_info"].get(router_host, {})
-            if system_data.get("temperature") is not None:
-                entities.append(WrtManagerTemperatureSensor(coordinator, router_host, router_name))
+        entities.append(WrtManagerTemperatureSensor(coordinator, router_host, router_name))
         _LOGGER.info("Created system monitoring sensors for %s", router_name)
 
         # Interface binary sensors are now in binary_sensor.py for better UX
