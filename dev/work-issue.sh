@@ -67,34 +67,31 @@ REGISTRY="$SCRIPT_DIR/registry.py"
 echo "=== Working on issue #${ISSUE_NUMBER} ==="
 echo "Log: $LOG_FILE"
 
-# --- Step 1: Setup worktree + environment ---
+# --- Step 1: Setup worktree (no environment yet — that starts after planning) ---
 
 echo "Setting up worktree..."
-ENV_OUTPUT=$("$SCRIPT_DIR/setup-worktree.sh" "$ISSUE_NUMBER" --branch-prefix "$BRANCH_PREFIX" 2>&1 | tee -a "$LOG_FILE")
+SETUP_OUTPUT=$("$SCRIPT_DIR/setup-worktree.sh" "$ISSUE_NUMBER" --branch-prefix "$BRANCH_PREFIX" --no-env 2>&1 | tee -a "$LOG_FILE")
 
-# Extract worktree path and env details from output
-WORKTREE_PATH=$(echo "$ENV_OUTPUT" | grep '"worktree_path"' | head -1 | sed 's/.*: *"\(.*\)".*/\1/')
+# Extract worktree path
+WORKTREE_PATH=$(echo "$SETUP_OUTPUT" | grep '"worktree_path"' | head -1 | sed 's/.*: *"\(.*\)".*/\1/')
 
 if [[ -z "$WORKTREE_PATH" ]]; then
     echo "ERROR: Could not determine worktree path"
     exit 1
 fi
 
-BRANCH_NAME_ACTUAL=$(echo "$ENV_OUTPUT" | grep '"branch_name"' | head -1 | sed 's/.*: *"\(.*\)".*/\1/' || echo "")
-HA_URL_ACTUAL=$(echo "$ENV_OUTPUT" | grep '"ha_url"' | head -1 | sed 's/.*: *"\(.*\)".*/\1/' || echo "")
-HA_PORT_ACTUAL=$(echo "$ENV_OUTPUT" | grep '"ha_port"' | head -1 | sed 's/.*: *\([0-9]*\).*/\1/' || echo "0")
-MOCK_PID_ACTUAL=$(echo "$ENV_OUTPUT" | grep '"mock_pid"' | head -1 | sed 's/.*: *\([0-9]*\).*/\1/' || echo "0")
+BRANCH_NAME_ACTUAL=$(echo "$SETUP_OUTPUT" | grep '"branch_name"' | head -1 | sed 's/.*: *"\(.*\)".*/\1/' || echo "")
 
-# Register run
+# Register run (no HA details yet — env starts after planning)
 RUN_ID=$($VENV "$REGISTRY" create \
     --issue "$ISSUE_NUMBER" \
     --branch "$BRANCH_NAME_ACTUAL" \
     --worktree "$WORKTREE_PATH" \
     --model "$MODEL" \
     --log "$LOG_FILE" \
-    --ha-url "$HA_URL_ACTUAL" \
-    --ha-port "${HA_PORT_ACTUAL:-0}" \
-    --mock-pid "${MOCK_PID_ACTUAL:-0}")
+    --ha-url "" \
+    --ha-port 0 \
+    --mock-pid 0)
 echo ""
 echo "  Run ID: $RUN_ID  (use this with: dev/sessions.sh <command> $RUN_ID)"
 echo "  Worktree: $WORKTREE_PATH"
@@ -203,7 +200,22 @@ fi
 
 echo ""
 echo "=== Plan approved ==="
-echo "Continuing with automated execution..."
+echo "Starting test environment..."
+
+# --- Step 2b: Start environment (after planning, so tokens are fresh) ---
+
+ENV_OUTPUT=$("$SCRIPT_DIR/setup-worktree.sh" "$ISSUE_NUMBER" --branch-prefix "$BRANCH_PREFIX" 2>&1 | tee -a "$LOG_FILE")
+
+HA_URL_ACTUAL=$(echo "$ENV_OUTPUT" | grep '"ha_url"' | head -1 | sed 's/.*: *"\(.*\)".*/\1/' || echo "")
+HA_PORT_ACTUAL=$(echo "$ENV_OUTPUT" | grep '"ha_port"' | head -1 | sed 's/.*: *\([0-9]*\).*/\1/' || echo "0")
+MOCK_PID_ACTUAL=$(echo "$ENV_OUTPUT" | grep '"mock_pid"' | head -1 | sed 's/.*: *\([0-9]*\).*/\1/' || echo "0")
+
+$VENV "$REGISTRY" update "$RUN_ID" \
+    --ha-url "$HA_URL_ACTUAL" \
+    --ha-port "${HA_PORT_ACTUAL:-0}" \
+    --mock-pid "${MOCK_PID_ACTUAL:-0}" 2>/dev/null || true
+
+echo "Environment ready. Continuing with automated execution..."
 
 # --- Step 3: Execute ---
 
