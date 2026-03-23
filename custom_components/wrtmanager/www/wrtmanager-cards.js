@@ -226,11 +226,7 @@ const WrtManagerMixin = (superClass) =>
         if (!device.identifiers) continue;
         if (device.manufacturer !== "OpenWrt") continue;
         for (const [domain, id] of device.identifiers) {
-          if (
-            domain === "wrtmanager" &&
-            id.includes(".") &&
-            !id.includes(":")
-          ) {
+          if (domain === "wrtmanager") {
             routers.push({
               ...device,
               routerHost: id,
@@ -1053,7 +1049,7 @@ class NetworkTopologyCard extends WrtManagerMixin(LitElement) {
   render() {
     const { routerNodes, deviceNodes, links } = this._buildGraph();
     if (!routerNodes.length) {
-      return html`<ha-card><div class="topo-empty">No WrtManager routers found</div></ha-card>`;
+      return html`<ha-card><div class="topo-empty">No routers found. Waiting for WrtManager data...</div></ha-card>`;
     }
     const { positions, height } = this._computeLayout(routerNodes, deviceNodes);
 
