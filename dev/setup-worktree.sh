@@ -77,25 +77,9 @@ echo "Path: $WORKTREE_PATH"
 mkdir -p "$WORKTREE_BASE"
 
 if [[ -d "$WORKTREE_PATH" ]]; then
-    if [[ "$START_ENV" == false ]]; then
-        # --no-env: worktree-only setup, destroy and recreate fresh
-        echo "Worktree already exists, cleaning up previous run..."
-        "$SCRIPT_DIR/teardown-worktree.sh" "$WORKTREE_PATH" 2>/dev/null || true
-        if [[ -f "$WORKTREE_PATH/.mock-ports.json" ]]; then
-            OLD_PID=$(cat "$WORKTREE_PATH/.mock-server.pid" 2>/dev/null || echo "")
-            if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
-                kill "$OLD_PID" 2>/dev/null || true
-            fi
-        fi
-        git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
-        git branch -D "$BRANCH_NAME" 2>/dev/null || true
-        git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
-        echo "Old worktree removed"
-    else
-        # Starting env on existing worktree — just teardown old env, keep code
-        echo "Worktree exists, starting environment..."
-        "$SCRIPT_DIR/teardown-worktree.sh" "$WORKTREE_PATH" 2>/dev/null || true
-    fi
+    # Worktree exists — reuse it, just teardown old environment
+    echo "Worktree exists, reusing..."
+    "$SCRIPT_DIR/teardown-worktree.sh" "$WORKTREE_PATH" 2>/dev/null || true
 fi
 
 if [[ ! -d "$WORKTREE_PATH" ]]; then
