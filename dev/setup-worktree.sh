@@ -206,8 +206,12 @@ EOF
     echo "$STATE_JSON" > "$WORKTREE_PATH/.dev-env-state.json"
     echo "$STATE_JSON"
 else
-    echo ""
-    echo "Worktree ready at: $WORKTREE_PATH"
-    echo "Branch: $BRANCH_NAME"
-    echo "Use --no-env was set; no test environment started."
+    # Output minimal JSON so callers can parse worktree_path and branch_name
+    cat <<EOF
+{
+  "issue_number": $ISSUE_NUMBER,
+  "branch_name": "$BRANCH_NAME",
+  "worktree_path": "$WORKTREE_PATH"
+}
+EOF
 fi
