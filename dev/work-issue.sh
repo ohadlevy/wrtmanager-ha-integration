@@ -163,10 +163,10 @@ If the feature needs new ubus calls or data, specify:
 Without this, the mock server returns errors and HA entities show as unavailable.
 
 ## Dashboard setup
-If adding new cards, specify changes to \`dev/setup-ha.py\`:
-- Add card type to dashboard guard check
-- Add card to dashboard card list
-Without this, the card won't appear on the test dashboard.
+If adding new cards, specify changes to:
+- \`dev/setup-ha.py\`: add card type to dashboard guard check + card list
+- \`examples/dashboard.yaml\`: add card to the example dashboard for users
+Without this, the card won't appear on the test dashboard or in docs.
 
 ## Tests
 All changes MUST include tests. Specify for each:
