@@ -19,10 +19,11 @@ A comprehensive Home Assistant integration for managing OpenWrt networks with mu
 
 ### Custom Lovelace Cards
 - **Network Devices**: Devices grouped by AP with search, signal bars, and disconnect action
-- **Router Health**: Memory, temperature, traffic, and device count per router
+- **Router Health**: Memory, load average, traffic, and device count per router
 - **Network Topology**: Visual radial layout with signal quality color coding
 - **Signal Heatmap**: Signal strength list with quality filtering
 - **Roaming Activity**: Live roaming event log tracking AP changes in real time
+- **Interface Health**: Per-router network interface status with color-coded health indicators
 
 ### Security & Performance
 - **HTTP ubus API**: Secure communication without SSH access required
@@ -137,9 +138,10 @@ Automatically identifies and categorizes:
   - Attributes: IP, MAC, vendor, signal strength, network, roaming info
 
 ### Sensors
-- **System Monitoring**: Router uptime, memory usage, load average, temperature
+- **System Monitoring**: Router uptime, memory usage, load average, CPU usage
 - **Network Statistics**: Device counts per network and interface, signal strength per interface
 - **Router Traffic**: Comprehensive network traffic monitoring with breakdown by interface type
+- **Interface Health**: Per-router network interface status, IP addresses, error counts
 - **SSID Status**: Binary sensors for SSID enabled/disabled state per router/area
 
 #### Router Traffic Sensor
@@ -183,15 +185,16 @@ Automatically identifies and categorizes:
 
 ## Custom Lovelace Cards
 
-WrtManager ships with 5 custom Lovelace cards that auto-register on integration setup. All cards auto-discover your routers and devices from the HA device registry — no manual entity configuration needed.
+WrtManager ships with 6 custom Lovelace cards that auto-register on integration setup. All cards auto-discover your routers and devices from the HA device registry — no manual entity configuration needed.
 
 | Card | Description |
 |------|-------------|
 | `custom:network-devices-card` | WiFi devices grouped by AP with search, signal bars, cross-integration badges, and disconnect action |
-| `custom:router-health-card` | Router health overview — memory, temperature, traffic, device count per router |
+| `custom:router-health-card` | Router health overview — memory, load average, traffic, device count per router |
 | `custom:network-topology-card` | Visual radial network topology with signal quality color coding |
 | `custom:signal-heatmap-card` | Signal strength list with quality filter chips (Poor/Fair/Good/Excellent) |
 | `custom:roaming-activity-card` | Active roamers and live roaming event log tracking AP changes in real time |
+| `custom:interface-health-card` | Per-router network interface status with IP, media type, and health indicators |
 
 ### Quick Start
 
@@ -203,13 +206,10 @@ views:
     cards:
       - type: custom:network-devices-card
       - type: custom:router-health-card
+      - type: custom:network-topology-card
       - type: custom:signal-heatmap-card
       - type: custom:roaming-activity-card
-
-  - title: Topology
-    panel: true
-    cards:
-      - type: custom:network-topology-card
+      - type: custom:interface-health-card
 ```
 
 ### Card Options
@@ -281,34 +281,14 @@ logger:
 
 ## Development
 
-**Want to contribute?** See [CONTRIBUTING.md](CONTRIBUTING.md) for complete development setup, testing guidelines, and contribution workflow.
+**Want to contribute?** See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and contribution workflow.
 
-Quick start for developers:
 ```bash
-./dev-setup.sh  # Sets up everything automatically
-make help       # See all available commands
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pre-commit install
+PYTHONPATH=. python -m pytest tests/ -v
 ```
-
-## Roadmap
-
-### v1.0 - Complete User Experience (In Progress)
-- [x] Advanced sensor entities (signal strength, roaming counts)
-- [x] Pre-built Lovelace cards (5 custom cards bundled with integration)
-- [x] Network topology visualization
-- [x] Device disconnection
-- [ ] Performance analytics and monitoring
-
-### v1.1 - Enhanced Management
-- [ ] Guest network management
-- [ ] Bandwidth monitoring per device
-
-### v1.2 - Automation Features
-- [ ] Device approval workflows
-- [ ] New device notifications
-
-### v1.3 - Advanced Analytics
-- [ ] Performance analytics dashboard
-- [ ] Firmware update notifications
 
 ## Support
 

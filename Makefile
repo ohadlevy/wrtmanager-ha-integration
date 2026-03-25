@@ -22,13 +22,7 @@ test:	## Run tests
 	python -m pytest tests/ -v
 
 test-cov:	## Run tests with coverage
-	python -m pytest tests/ --cov=custom_components/wrtmanager/ubus_client --cov-report=term-missing --cov-report=html
-
-test-unit:	## Run only unit tests
-	python -m pytest tests/ -m unit -v
-
-test-integration:	## Run only integration tests
-	python -m pytest tests/ -m integration -v
+	python -m pytest tests/ --cov=custom_components/wrtmanager --cov-report=term-missing --cov-report=html
 
 test-watch:	## Run tests in watch mode (requires pytest-watch: pip install pytest-watch)
 	ptw --runner "python -m pytest tests/ --tb=short"
@@ -36,7 +30,7 @@ test-watch:	## Run tests in watch mode (requires pytest-watch: pip install pytes
 # Code Quality
 lint:	## Run all linting checks
 	flake8 custom_components/ tests/
-	mypy custom_components/wrtmanager/ubus_client.py --ignore-missing-imports
+	pylint custom_components/ tests/ --disable=all --enable=unused-import,undefined-variable
 
 format:	## Format code with black and isort
 	black custom_components/ tests/
@@ -45,9 +39,6 @@ format:	## Format code with black and isort
 format-check:	## Check if code is properly formatted
 	black --check custom_components/ tests/
 	isort --check-only custom_components/ tests/
-
-type-check:	## Run type checking with mypy
-	mypy custom_components/
 
 # Pre-commit
 pre-commit:	## Run pre-commit hooks on all files
@@ -100,10 +91,6 @@ release-check:	## Check if ready for release
 	@VERSION=$$(grep 'version = ' pyproject.toml | cut -d'"' -f2) && \
 	 grep -q "version.*$$VERSION" custom_components/wrtmanager/manifest.json && \
 	 echo "✅ Version $$VERSION is consistent across files!"
-
-# Quick development commands
-quick-test:	## Quick test run (no coverage)
-	python -m pytest tests/test_ubus_direct.py tests/test_ubus_coverage.py -v
 
 # CI simulation
 ci:	## Simulate CI environment locally

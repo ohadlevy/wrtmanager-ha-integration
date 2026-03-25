@@ -11,21 +11,9 @@ Thank you for your interest in contributing to WrtManager! This document provide
 git clone https://github.com/ohadlevy/wrtmanager-ha-integration.git
 cd wrtmanager-ha-integration
 
-# Set up development environment (this creates a venv and installs everything)
-./dev-setup.sh
-
-# The script automatically activates the venv and runs verification tests
-# If you need to reactivate later: source venv/bin/activate
-```
-
-### 2. Alternative Manual Setup
-
-```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install development dependencies
+# Create virtual environment and install
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Install pre-commit hooks
@@ -87,15 +75,12 @@ make dev-fix
 - All new features must include comprehensive tests
 - Tests should cover both success and error scenarios
 
-#### Test Types
+#### Running Tests
 ```bash
-# Unit tests (fast, isolated)
-make test-unit
-
-# Integration tests (with external dependencies)
-make test-integration
-
 # All tests
+PYTHONPATH=. .venv/bin/python -m pytest tests/ -v
+
+# Or via make
 make test
 ```
 
@@ -136,30 +121,7 @@ make format-check
 - **isort** for import sorting
 - **Trailing whitespaces** removed automatically
 
-### 3. Type Checking
-
-We use **mypy** for static type checking:
-
-```bash
-# Run type checking
-make type-check
-```
-
-**Requirements:**
-- All public functions must have type hints
-- Use `Optional[T]` for nullable types
-- Import types from `typing` module
-
-Example:
-```python
-from typing import Dict, List, Optional
-
-async def get_devices(session_id: str) -> Optional[List[Dict[str, Any]]]:
-    """Get wireless devices from router."""
-    ...
-```
-
-### 4. Linting
+### 3. Linting
 
 We use multiple linters for code quality:
 
@@ -171,7 +133,6 @@ make lint
 **Tools:**
 - **flake8** for general Python linting
 - **pylint** for additional code quality checks
-- **mypy** for type checking
 
 ### 5. Pre-commit Hooks
 
@@ -188,7 +149,6 @@ make pre-commit
 **What gets checked:**
 - Code formatting (Black, isort)
 - Linting (flake8, pylint)
-- Type checking (mypy)
 - Tests execution
 - Basic file checks (trailing whitespace, etc.)
 
@@ -198,22 +158,23 @@ make pre-commit
 
 ```
 custom_components/wrtmanager/
-├── __init__.py          # Integration setup
+├── __init__.py          # Integration setup + Lovelace card registration
 ├── manifest.json        # HA integration metadata
-├── config_flow.py       # Configuration UI
-├── coordinator.py       # Data update coordinator
-├── ubus_client.py       # OpenWrt ubus API client
-├── device_manager.py    # Device identification logic
-├── const.py            # Constants
-├── sensor.py           # Sensor entities
-├── binary_sensor.py    # Binary sensor entities
-└── device_tracker.py   # Device tracker entities
+├── config_flow.py       # Configuration UI flow
+├── coordinator.py       # DataUpdateCoordinator, multi-router parallel polling
+├── ubus_client.py       # HTTP ubus JSON-RPC client
+├── device_manager.py    # MAC OUI vendor identification
+├── const.py             # Constants
+├── sensor.py            # System/network monitoring sensors
+├── binary_sensor.py     # Device presence, interface status, SSID monitoring
+├── button.py            # WiFi client disconnect buttons
+├── diagnostics.py       # HA diagnostics
+└── www/                 # Lovelace custom cards (JS)
 
 tests/
-├── conftest.py         # Test fixtures
-├── unit/               # Unit tests
-├── integration/        # Integration tests
-└── fixtures/           # Test data
+├── conftest.py          # Test fixtures
+├── test_*.py            # Unit tests
+└── e2e/                 # End-to-end browser tests (Playwright)
 ```
 
 ### 2. Design Patterns
@@ -331,8 +292,8 @@ Our CI pipeline runs automatically on:
 
 #### Pipeline Stages:
 
-1. **Test Suite** - Run tests on Python 3.11 and 3.12
-2. **Code Quality** - Formatting, linting, type checking
+1. **Test Suite** - Run tests on Python 3.12
+2. **Code Quality** - Formatting, linting (Black, isort, flake8, pylint)
 3. **Security Scan** - Vulnerability scanning
 4. **HA Validation** - Home Assistant compliance checks
 5. **Build Check** - Package build verification
@@ -341,9 +302,7 @@ Our CI pipeline runs automatically on:
 
 Pull requests must pass all checks:
 - ✅ All tests passing
-- ✅ Code coverage ≥ 80%
 - ✅ No linting errors
-- ✅ Type checking passes
 - ✅ Security scan clean
 - ✅ HA validation passes
 
