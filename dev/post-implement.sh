@@ -452,21 +452,10 @@ Rules:
 FIXEOF
 )
 
-        # Build allowed tools
-        FIX_ALLOWED_TOOLS_FILE="$REPO_ROOT/.claude/settings.json"
-        FIX_EXCLUDE="TodoWrite,ToolSearch,WebSearch,WebFetch,AskUserQuestion,Skill,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,CronCreate,CronDelete,CronList"
-        if [[ -f "$FIX_ALLOWED_TOOLS_FILE" ]]; then
-            FIX_ALLOWED=$(python3 -c "
-import json
-exclude = set('$FIX_EXCLUDE'.split(','))
-with open('$FIX_ALLOWED_TOOLS_FILE') as f:
-    settings = json.load(f)
-tools = [t for t in settings.get('permissions', {}).get('allow', []) if t.split('(')[0] not in exclude]
-print(','.join(tools))
-")
-        else
-            FIX_ALLOWED="Read,Write,Edit,Glob,Grep,Bash"
-        fi
+        # Build allowed tools — code-only, no infrastructure
+        # The fix step must NOT run mock servers, HA commands, curl, or podman
+        # because child processes spawned by claude -p prevent it from exiting.
+        FIX_ALLOWED="Read,Write,Edit,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git branch:*),Bash(git show:*),Bash(PYTHONPATH=. .venv/bin/python -m pytest:*),Bash(.venv/bin/python -m pytest:*),Bash(.venv/bin/python -m black:*),Bash(.venv/bin/python -m isort:*),Bash(.venv/bin/python -m flake8:*),Bash(ls:*),Bash(tree:*)"
 
         cd "$WORKTREE_PATH"
         stdbuf -oL claude -p "$FIX_PROMPT" \
