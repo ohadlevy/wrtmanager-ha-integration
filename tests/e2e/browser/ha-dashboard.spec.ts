@@ -193,8 +193,14 @@ test.describe('WrtManager Dashboard Cards', () => {
     const realErrors = consoleErrors.filter(
       (e) => !e.includes('favicon') && !e.includes('service-worker')
     );
+    // Write console errors to file for diagnostics
+    const fs = await import('fs');
+    const errorFile = path.join(SCREENSHOT_DIR, 'console-errors.txt');
     if (realErrors.length > 0) {
       console.warn('Console errors found:', realErrors);
+      fs.writeFileSync(errorFile, realErrors.join('\n'));
+    } else {
+      fs.writeFileSync(errorFile, 'No console errors');
     }
   });
 });
