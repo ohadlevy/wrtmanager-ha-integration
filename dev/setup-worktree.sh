@@ -130,7 +130,12 @@ if [[ "$START_ENV" == true ]]; then
     # Start mock ubus servers
     echo "Starting mock ubus servers on port $MOCK_PORT..."
     MOCK_LOG_FILE="$WORKTREE_PATH/.mock-server.log"
-    $VENV "$SCRIPT_DIR/mock_ubus_server.py" \
+    # Use worktree's mock server + scenario if available (may handle new ubus calls)
+    MOCK_SERVER="$WORKTREE_PATH/dev/mock_ubus_server.py"
+    [[ -f "$MOCK_SERVER" ]] || MOCK_SERVER="$SCRIPT_DIR/mock_ubus_server.py"
+    WT_SCENARIO="$WORKTREE_PATH/dev/scenarios/default.json"
+    [[ -f "$WT_SCENARIO" ]] && SCENARIO="$WT_SCENARIO"
+    $VENV "$MOCK_SERVER" \
         --scenario "$SCENARIO" \
         --base-port "$MOCK_PORT" \
         --port-file "$MOCK_PORT_FILE" \
