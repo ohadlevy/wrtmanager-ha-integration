@@ -184,18 +184,23 @@ echo ""
 echo "=========================================="
 echo ""
 
-# Launch Claude interactively for planning
-# CLAUDE.md already has the issue context and planning instructions
-claude --model "$MODEL" --verbose
+# Skip planning if plan already exists (e.g. re-run of same issue)
+if [[ -f "$PLAN_FILE" ]]; then
+    echo "Plan already exists (.plan.md), skipping planning phase."
+else
+    # Launch Claude interactively for planning
+    # CLAUDE.md already has the issue context and planning instructions
+    claude --model "$MODEL" --verbose
 
-# Check if plan was written
-if [[ ! -f "$PLAN_FILE" ]]; then
-    echo ""
-    echo "No plan file found (.plan.md). Pipeline stopped."
-    echo "To resume: cd $WORKTREE_PATH && claude"
-    echo "Then write .plan.md and run: dev/sessions.sh execute $RUN_ID"
-    $VENV "$REGISTRY" update "$RUN_ID" --status "plan-pending" 2>/dev/null || true
-    exit 0
+    # Check if plan was written
+    if [[ ! -f "$PLAN_FILE" ]]; then
+        echo ""
+        echo "No plan file found (.plan.md). Pipeline stopped."
+        echo "To resume: cd $WORKTREE_PATH && claude"
+        echo "Then write .plan.md and run: dev/sessions.sh execute $RUN_ID"
+        $VENV "$REGISTRY" update "$RUN_ID" --status "plan-pending" 2>/dev/null || true
+        exit 0
+    fi
 fi
 
 echo ""
