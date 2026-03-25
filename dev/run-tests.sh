@@ -220,7 +220,7 @@ if [[ "$BROWSER_ONLY" == true ]]; then
 
         # Review-only: desktop viewport, card tests only (~40s vs ~2.4m)
         if [[ "$REVIEW_ONLY" == true ]]; then
-            PLAYWRIGHT_ARGS="--project=desktop --grep='(router-health|network-devices|network-topology|signal-heatmap|roaming-activity|dashboard loads|no console errors)'"
+            PLAYWRIGHT_ARGS="--project=desktop --grep='(card renders|dashboard loads|console errors)'"
             echo "--- Browser tests (review: desktop cards only) ---"
         else
             PLAYWRIGHT_ARGS=""

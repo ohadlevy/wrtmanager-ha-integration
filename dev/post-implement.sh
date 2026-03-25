@@ -303,7 +303,7 @@ SCREENSHOT_DIR="$WORKTREE_PATH/.test-screenshots"
 echo ""
 echo "=== Taking screenshots ==="
 rm -f "$SCREENSHOT_DIR"/*.png 2>/dev/null || true
-"$REPO_ROOT/dev/run-tests.sh" \
+"$WORKTREE_PATH/dev/run-tests.sh" \
     --worktree-path "$WORKTREE_PATH" \
     --review-only \
     2>&1 | tee -a "$LOG_FILE" || true
@@ -486,7 +486,7 @@ FIXEOF
         echo ""
         echo "=== Re-taking screenshots after fix ==="
         rm -f "$SCREENSHOT_DIR"/*.png 2>/dev/null || true
-        "$REPO_ROOT/dev/run-tests.sh" \
+        "$WORKTREE_PATH/dev/run-tests.sh" \
             --worktree-path "$WORKTREE_PATH" \
             --review-only \
             2>&1 | tee -a "$LOG_FILE" || true
