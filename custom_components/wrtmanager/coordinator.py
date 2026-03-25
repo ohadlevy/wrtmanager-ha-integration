@@ -127,13 +127,20 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         dhcp_data: Dict[str, Any] = {}
         system_info: Dict[str, Any] = {}
         interfaces: Dict[str, Any] = {}
+        interface_ips: Dict[str, Any] = {}
 
         for i, (host, result) in enumerate(zip(self.sessions.keys(), router_data_results)):
             if isinstance(result, Exception):
                 _LOGGER.error("Data collection failed for %s: %s", host, result)
                 continue
 
-            wifi_devices, router_dhcp_data, router_system_data, router_interface_data = result
+            (
+                wifi_devices,
+                router_dhcp_data,
+                router_system_data,
+                router_interface_data,
+                router_ip_map,
+            ) = result
             all_devices.extend(wifi_devices)
 
             # Store system data for each router
@@ -143,6 +150,8 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             # Store interface data for each router
             if router_interface_data:
                 interfaces[host] = router_interface_data
+
+            interface_ips[host] = router_ip_map
 
             # Use DHCP data from the first router that provides it
             if not dhcp_data and router_dhcp_data:
@@ -166,7 +175,14 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     dhcp_leases = await client.get_dhcp_leases(session_id)
                     static_hosts = await client.get_static_dhcp_hosts(session_id)
 
-                    if dhcp_leases or static_hosts:
+                    has_leases = bool(
+                        (
+                            dhcp_leases
+                            and (dhcp_leases.get("dhcp_leases") or dhcp_leases.get("device"))
+                        )
+                        or static_hosts
+                    )
+                    if has_leases:
                         # Found DHCP data on fallback router
                         self._dhcp_routers.add(fallback_host)
                         dhcp_data = self._parse_dhcp_data(dhcp_leases, static_hosts)
@@ -207,6 +223,8 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             "routers": list(self.sessions.keys()),
             "last_update": datetime.now(),
             "total_devices": len(enriched_devices),
+            "interface_ips": interface_ips,
+            "dhcp_routers": list(self._dhcp_routers),
         }
 
     async def _authenticate_router(self, host: str, client: UbusClient) -> str:
@@ -291,6 +309,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             # Get network interface status
             network_interfaces = await client.get_network_interfaces(session_id)
             wireless_status = await client.get_wireless_status(session_id)
+            interface_dump = await client.get_interface_dump(session_id)
 
             _LOGGER.debug(
                 "Router %s - network_interfaces result: %s",
@@ -333,7 +352,11 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 static_hosts = await client.get_static_dhcp_hosts(session_id)
                 _LOGGER.debug("Router %s - static hosts result: %s", host, static_hosts)
 
-                if dhcp_leases or static_hosts:
+                has_leases = bool(
+                    (dhcp_leases and (dhcp_leases.get("dhcp_leases") or dhcp_leases.get("device")))
+                    or static_hosts
+                )
+                if has_leases:
                     # Mark this router as a DHCP server
                     self._dhcp_routers.add(host)
                     _LOGGER.debug("Router %s - parsing DHCP data", host)
@@ -360,7 +383,21 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Error collecting data from %s: %s", host, ex)
             raise UpdateFailed(f"Data collection failed for {host}: {ex}")
 
-        return wifi_devices, dhcp_data, system_data, interface_data
+        # Build IP + logical name map from interface dump
+        ip_map: Dict[str, Any] = {}
+        if interface_dump and "interface" in interface_dump:
+            for iface in interface_dump["interface"]:
+                l3dev = iface.get("l3_device")
+                logical = iface.get("interface")
+                addrs = iface.get("ipv4-address", [])
+                if l3dev and logical:
+                    ip_str = None
+                    if addrs:
+                        a = addrs[0]
+                        ip_str = f"{a['address']}/{a['mask']}"
+                    ip_map[l3dev] = {"ip": ip_str, "logical": logical}
+
+        return wifi_devices, dhcp_data, system_data, interface_data, ip_map
 
     def _parse_dhcp_data(
         self, dhcp_leases: Optional[Dict], static_hosts: Optional[Dict]

@@ -146,6 +146,7 @@ class MockRouter:
             ("system", "info"): self._handle_system_info,
             ("system", "board"): self._handle_system_board,
             ("network.device", "status"): self._handle_network_device_status,
+            ("network.interface", "dump"): self._handle_network_interface_dump,
             ("network.wireless", "status"): self._handle_wireless_status,
             ("luci-rpc", "getDHCPLeases"): self._handle_dhcp_leases,
             ("dhcp", "ipv4leases"): self._handle_dhcp_ipv4leases,
@@ -225,6 +226,9 @@ class MockRouter:
 
     def _handle_network_device_status(self, params: dict) -> dict:
         return self.config.get("network_device_status", {})
+
+    def _handle_network_interface_dump(self, params: dict) -> dict:
+        return self.config.get("network_interface_dump", {"interface": []})
 
     def _handle_wireless_status(self, params: dict) -> dict:
         return self.config.get("wireless_status", {})

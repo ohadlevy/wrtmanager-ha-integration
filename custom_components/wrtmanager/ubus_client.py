@@ -343,6 +343,11 @@ class UbusClient:
         result = await self.call_ubus(session_id, "network.device", "status", {})
         return result if result else None
 
+    async def get_interface_dump(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get logical interface list with IPs (network.interface dump)."""
+        result = await self.call_ubus(session_id, "network.interface", "dump", {})
+        return result if result else None
+
     async def get_wireless_status(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get wireless interface status."""
         result = await self.call_ubus(session_id, "network.wireless", "status", {})

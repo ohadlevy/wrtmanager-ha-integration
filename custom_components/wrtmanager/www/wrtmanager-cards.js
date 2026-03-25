@@ -1495,6 +1495,248 @@ class RoamingActivityCardEditor extends LitElement {
 customElements.define("roaming-activity-card", RoamingActivityCard);
 customElements.define("roaming-activity-card-editor", RoamingActivityCardEditor);
 
+// =====================================================================
+// CARD 6: Interface Health
+// =====================================================================
+
+class InterfaceHealthCard extends WrtManagerMixin(LitElement) {
+  static get properties() {
+    return { hass: { type: Object }, config: { type: Object }, _popover: { type: Object } };
+  }
+
+  constructor() {
+    super();
+    this._popover = null;
+  }
+
+  setConfig(config) { this.config = config; }
+  static getConfigElement() { return document.createElement("interface-health-card-editor"); }
+  static getStubConfig() { return {}; }
+
+  _findRouters() {
+    if (!this.hass) return [];
+    const routers = [];
+    const seen = new Set();
+
+    for (const [id, state] of Object.entries(this.hass.states)) {
+      if (!id.endsWith("_interface_health")) continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+
+      let routerHost = null;
+      let haDevice = null;
+      if (this.hass.entities) {
+        const entityReg = this.hass.entities[id];
+        if (entityReg?.device_id) {
+          haDevice = this.hass.devices?.[entityReg.device_id] || null;
+          if (haDevice?.identifiers) {
+            for (const [domain, ident] of haDevice.identifiers) {
+              if (domain === "wrtmanager") { routerHost = ident; break; }
+            }
+          }
+        }
+      }
+
+      const attrs = state.attributes || {};
+      routers.push({
+        entityId: id,
+        routerHost,
+        haDevice,
+        name: haDevice?.name_by_user || haDevice?.name || attrs.friendly_name || id,
+        interfaces: attrs.interfaces || [],
+        routerRole: attrs.router_role || "ap",
+        hasInternet: attrs.has_internet || false,
+        hasDhcp: attrs.has_dhcp || false,
+        interfaceCount: attrs.interface_count || 0,
+        upCount: attrs.up_count || 0,
+      });
+    }
+
+    // Sort: internet → dhcp → ap
+    const roleOrder = { internet: 0, dhcp: 1, ap: 2 };
+    routers.sort((a, b) => (roleOrder[a.routerRole] ?? 2) - (roleOrder[b.routerRole] ?? 2));
+    return routers;
+  }
+
+  _formatTraffic(mb) {
+    if (mb == null) return "-";
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    return `${mb.toFixed(0)} MB`;
+  }
+
+  _showPopover(e, members) {
+    e.stopPropagation();
+    const rect = e.target.getBoundingClientRect();
+    this._popover = { members, x: rect.left, y: rect.bottom + 4 };
+  }
+
+  _hidePopover() {
+    this._popover = null;
+  }
+
+  _renderInterface(iface) {
+    const statusClass = {
+      up: "ihc-dot-up",
+      no_carrier: "ihc-dot-no-carrier",
+      down: "ihc-dot-down",
+    }[iface.status] || "ihc-dot-down";
+
+    const totalErrors = (iface.rx_errors || 0) + (iface.tx_errors || 0);
+
+    const mediaIcons = [];
+    if (iface.has_wired) {
+      mediaIcons.push(html`
+        <ha-icon icon="mdi:ethernet"
+          class="ihc-media-icon"
+          style="--mdc-icon-size: 14px;"
+          @mouseenter=${(e) => iface.bridge_members?.length ? this._showPopover(e, iface.bridge_members) : null}
+          @mouseleave=${() => this._hidePopover()}
+        ></ha-icon>`);
+    }
+    if (iface.has_wireless) {
+      mediaIcons.push(html`
+        <ha-icon icon="mdi:wifi"
+          class="ihc-media-icon"
+          style="--mdc-icon-size: 14px;"
+          @mouseenter=${(e) => iface.bridge_members?.length ? this._showPopover(e, iface.bridge_members) : null}
+          @mouseleave=${() => this._hidePopover()}
+        ></ha-icon>`);
+    }
+
+    const rightIndicator = iface.is_wan
+      ? html`<span class="ihc-traffic">
+          <ha-icon icon="mdi:arrow-down" style="--mdc-icon-size: 11px; color: #4caf50;"></ha-icon>${this._formatTraffic(iface.rx_bytes_mb)}
+          <ha-icon icon="mdi:arrow-up" style="--mdc-icon-size: 11px; color: #2196f3;"></ha-icon>${this._formatTraffic(iface.tx_bytes_mb)}
+        </span>`
+      : iface.device_count != null
+        ? html`<span class="ihc-device-count">${iface.device_count} ⬡</span>`
+        : html``;
+
+    return html`
+      <div class="ihc-iface-row">
+        <span class="ihc-dot ${statusClass}"></span>
+        <span class="ihc-logical-name">${iface.logical_name}</span>
+        <span class="ihc-ip">${iface.ip || "—"}</span>
+        <span class="ihc-phys-name">${iface.physical_name}</span>
+        <span class="ihc-media-icons">${mediaIcons}</span>
+        <span class="ihc-right">
+          ${totalErrors > 0 ? html`<span class="ihc-errors">⚠ ${totalErrors}err</span>` : ""}
+          ${rightIndicator}
+        </span>
+      </div>
+    `;
+  }
+
+  _renderRouter(r) {
+    const icon = (r.routerRole === "ap") ? "mdi:access-point" : "mdi:router-wireless";
+    const badges = [];
+    if (r.hasInternet) badges.push(html`<span class="ihc-role-badge ihc-role-internet">INTERNET</span>`);
+    if (r.hasDhcp) badges.push(html`<span class="ihc-role-badge ihc-role-dhcp">DHCP</span>`);
+    if (!r.hasInternet && !r.hasDhcp) badges.push(html`<span class="ihc-role-badge ihc-role-ap">AP</span>`);
+
+    return html`
+      <div class="ihc-router">
+        <div class="ihc-router-header">
+          <div class="ihc-router-title">
+            <ha-icon icon="${icon}" style="--mdc-icon-size: 18px; color: var(--primary-color);"></ha-icon>
+            <span class="ihc-router-name">${r.name}</span>
+          </div>
+          <div class="ihc-router-badges">${badges}</div>
+        </div>
+        <div class="ihc-divider"></div>
+        ${r.interfaces.length === 0
+          ? html`<div class="ihc-empty">No interface data</div>`
+          : r.interfaces.map((iface) => this._renderInterface(iface))
+        }
+      </div>
+    `;
+  }
+
+  render() {
+    const routers = this._findRouters();
+    if (routers.length === 0) {
+      return html`<ha-card><div class="ihc" style="text-align:center;padding:24px;color:var(--secondary-text-color);">No interface data</div></ha-card>`;
+    }
+
+    return html`
+      <ha-card>
+        <div class="ihc">
+          <div class="ihc-header">
+            <ha-icon icon="mdi:lan" style="--mdc-icon-size: 20px;"></ha-icon>
+            Interface Health
+            <span class="ihc-count">(${routers.length})</span>
+          </div>
+          <div class="ihc-grid">${routers.map((r) => this._renderRouter(r))}</div>
+        </div>
+        ${this._popover ? html`
+          <div class="ihc-popover" style="left:${this._popover.x}px;top:${this._popover.y}px;" @mouseleave=${() => this._hidePopover()}>
+            <div class="ihc-popover-title">Bridge members</div>
+            ${this._popover.members.map((m) => {
+              const isWifi = (m.includes("phy") && m.includes("ap")) || m.startsWith("wlan");
+              const band = m.startsWith("phy0") ? "2.4 GHz" : m.startsWith("phy1") ? "5 GHz" : "";
+              return html`<div class="ihc-popover-member">
+                <ha-icon icon=${isWifi ? "mdi:wifi" : "mdi:ethernet"} style="--mdc-icon-size: 13px;"></ha-icon>
+                <span>${m}</span>
+                ${band ? html`<span class="ihc-popover-band">${band}</span>` : ""}
+              </div>`;
+            })}
+          </div>` : ""}
+      </ha-card>
+    `;
+  }
+
+  static get styles() {
+    return css`
+      .ihc { padding: 16px; }
+      .ihc-header { font-size: 1.1em; font-weight: 500; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+      .ihc-count { color: var(--secondary-text-color); font-weight: normal; font-size: 0.85em; }
+      .ihc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+      .ihc-router { background: var(--input-fill-color, rgba(255,255,255,0.04)); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+      .ihc-router-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+      .ihc-router-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+      .ihc-router-name { font-weight: 500; font-size: 0.95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .ihc-router-badges { display: flex; gap: 4px; flex-shrink: 0; }
+      .ihc-role-badge { font-size: 0.7em; padding: 1px 5px; border-radius: 4px; font-weight: 600; }
+      .ihc-role-internet { background: var(--primary-color); color: white; }
+      .ihc-role-dhcp { background: rgba(var(--rgb-primary-color, 3,169,244), 0.2); color: var(--primary-color); }
+      .ihc-role-ap { background: rgba(255,255,255,0.08); color: var(--secondary-text-color); }
+      .ihc-divider { height: 1px; background: var(--divider-color, rgba(255,255,255,0.1)); margin: 4px 0; }
+      .ihc-iface-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 0.82em; flex-wrap: wrap; }
+      .ihc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+      .ihc-dot-up { background: #4caf50; }
+      .ihc-dot-no-carrier { background: #ff9800; }
+      .ihc-dot-down { background: #f44336; }
+      .ihc-logical-name { font-weight: 500; min-width: 40px; }
+      .ihc-ip { font-family: monospace; color: var(--secondary-text-color); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ihc-phys-name { font-size: 0.88em; color: var(--disabled-text-color, #888); white-space: nowrap; }
+      .ihc-media-icons { display: flex; gap: 2px; color: var(--secondary-text-color); }
+      .ihc-media-icon { cursor: default; }
+      .ihc-right { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; }
+      .ihc-traffic { display: flex; align-items: center; gap: 3px; font-size: 0.88em; color: var(--secondary-text-color); }
+      .ihc-device-count { font-size: 0.88em; color: var(--secondary-text-color); }
+      .ihc-errors { font-size: 0.82em; color: #ff9800; }
+      .ihc-empty { color: var(--secondary-text-color); font-size: 0.9em; padding: 4px 0; }
+      .ihc-popover { position: fixed; background: var(--card-background-color, #1c1c1c); border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; z-index: 9999; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+      .ihc-popover-title { font-weight: 600; margin-bottom: 6px; color: var(--primary-text-color); }
+      .ihc-popover-member { display: flex; align-items: center; gap: 6px; padding: 2px 0; color: var(--secondary-text-color); }
+      .ihc-popover-band { font-size: 0.85em; color: var(--disabled-text-color, #888); margin-left: auto; }
+    `;
+  }
+
+  getCardSize() { return 5; }
+}
+
+class InterfaceHealthCardEditor extends LitElement {
+  static get properties() { return { hass: { type: Object }, _config: { type: Object } }; }
+  setConfig(config) { this._config = config; }
+  render() {
+    return html`<div style="padding:16px;"><p style="color:var(--secondary-text-color);font-size:0.9em;">Shows all network interfaces per router with status, IP address, media type, and health indicators. Routers are sorted by role: Internet → DHCP → AP.</p></div>`;
+  }
+}
+
+customElements.define("interface-health-card", InterfaceHealthCard);
+customElements.define("interface-health-card-editor", InterfaceHealthCardEditor);
+
 // ─── Card registration ───────────────────────────────────────────────
 
 window.customCards = window.customCards || [];
@@ -1504,6 +1746,7 @@ window.customCards.push(
   { type: "network-topology-card", name: "Network Topology", description: "Visual network topology with signal quality color coding", preview: true },
   { type: "signal-heatmap-card", name: "Signal Heatmap", description: "Signal strength list with quality filtering and sorting", preview: true },
   { type: "roaming-activity-card", name: "Roaming Activity", description: "Track device roaming between access points with live event log", preview: true },
+  { type: "interface-health-card", name: "Interface Health", description: "Network interface status per router with IP, media type, and health indicators", preview: true },
 );
 
 console.info("%c WrtManager Cards ", "background: #03a9f4; color: white; font-weight: bold;");
