@@ -158,7 +158,10 @@ if [[ "$START_ENV" == true ]]; then
     echo ""
     echo "Setting up HA integration..."
     TOKEN_FILE="$WORKTREE_PATH/.ha-token"
-    $VENV "$SCRIPT_DIR/setup-ha.py" \
+    # Use worktree's setup-ha.py if available (it may add new cards to dashboard)
+    SETUP_HA="$WORKTREE_PATH/dev/setup-ha.py"
+    [[ -f "$SETUP_HA" ]] || SETUP_HA="$SCRIPT_DIR/setup-ha.py"
+    $VENV "$SETUP_HA" \
         --ha-url "http://localhost:$HA_PORT" \
         --mock-port-file "$MOCK_PORT_FILE" \
         --token-file "$TOKEN_FILE" || {
