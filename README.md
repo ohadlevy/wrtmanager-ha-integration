@@ -138,7 +138,7 @@ Automatically identifies and categorizes:
   - Attributes: IP, MAC, vendor, signal strength, network, roaming info
 
 ### Sensors
-- **System Monitoring**: Router uptime, memory usage, load average, CPU usage
+- **System Monitoring**: Router uptime, memory usage, load average
 - **Network Statistics**: Device counts per network and interface, signal strength per interface
 - **Router Traffic**: Comprehensive network traffic monitoring with breakdown by interface type
 - **Interface Health**: Per-router network interface status, IP addresses, error counts
