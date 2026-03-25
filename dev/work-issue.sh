@@ -156,8 +156,23 @@ MUST include an ASCII visual mockup showing the card layout. Example:
 ## Data flow
 ubus call → coordinator field → sensor entity → card display. Field names and types.
 
+## Mock server changes
+If the feature needs new ubus calls or data, specify:
+- New handler in \`dev/mock_ubus_server.py\` (method, path, response format)
+- New scenario data in \`dev/scenarios/default.json\` (key name, structure, sample values)
+Without this, the mock server returns errors and HA entities show as unavailable.
+
+## Dashboard setup
+If adding new cards, specify changes to \`dev/setup-ha.py\`:
+- Add card type to dashboard guard check
+- Add card to dashboard card list
+Without this, the card won't appear on the test dashboard.
+
 ## Tests
-Test cases + which test file to add to.
+All changes MUST include tests. Specify for each:
+- Unit tests: test file path, test cases, what each validates
+- Playwright browser tests: if adding/modifying cards, add a screenshot test in \`tests/e2e/browser/ha-dashboard.spec.ts\` using the \`screenshotCard()\` helper
+Without screenshot tests, the visual review cannot see the new card.
 
 ## NOT doing
 Out of scope items.
@@ -169,6 +184,8 @@ Out of scope items.
 - UI changes MUST integrate into existing sections
 - Smallest change that solves the issue
 - Do NOT implement, only plan
+- Plan MUST include ALL of: mock server changes, dashboard setup, unit tests, screenshot tests
+- If any section is not needed, explicitly say "No changes needed" with reason
 PLANEOF
 
 echo ""
