@@ -506,7 +506,31 @@ if [[ "$REVIEW_VERDICT" == "PASS" ]]; then
     echo ""
     echo "=== Creating PR (review passed) ==="
 
-    git -C "$WORKTREE_PATH" push -u origin HEAD 2>&1 || echo "ERROR: Failed to push"
+    # Squash all commits into one clean commit and rebase onto main
+    COMMIT_COUNT=$(git -C "$WORKTREE_PATH" rev-list main..HEAD --count 2>/dev/null || echo "0")
+    if [[ "$COMMIT_COUNT" -gt 1 ]]; then
+        echo "Squashing $COMMIT_COUNT commits into one..."
+        MERGE_BASE=$(git -C "$WORKTREE_PATH" merge-base main HEAD)
+        FIRST_MSG=$(git -C "$WORKTREE_PATH" log --format='%s' --reverse main..HEAD | head -1)
+        git -C "$WORKTREE_PATH" reset --soft "$MERGE_BASE"
+        git -C "$WORKTREE_PATH" commit --no-verify -m "$FIRST_MSG
+
+Closes #${ISSUE_NUMBER}"
+    fi
+
+    # Rebase onto latest main to avoid conflicts
+    git -C "$REPO_ROOT" fetch origin main:main 2>/dev/null || true
+    if ! git -C "$WORKTREE_PATH" rebase main 2>/dev/null; then
+        echo "Rebase conflict — attempting auto-resolve (prefer worktree changes)..."
+        # For each conflicted file, prefer the branch version
+        git -C "$WORKTREE_PATH" diff --name-only --diff-filter=U | while read -r f; do
+            git -C "$WORKTREE_PATH" checkout --theirs "$f"
+            git -C "$WORKTREE_PATH" add "$f"
+        done
+        git -C "$WORKTREE_PATH" rebase --continue 2>/dev/null || git -C "$WORKTREE_PATH" rebase --abort
+    fi
+
+    git -C "$WORKTREE_PATH" push -u origin HEAD --force-with-lease 2>&1 || echo "ERROR: Failed to push"
 
     DIFF_STAT=$(git -C "$WORKTREE_PATH" diff main...HEAD --stat 2>/dev/null || echo "")
     PR_BODY="$(cat <<PRBODYEOF
