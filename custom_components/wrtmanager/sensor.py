@@ -156,6 +156,11 @@ async def async_setup_entry(
                 WrtManagerRouterTrafficCardSensor(coordinator, router_host, router_name)
             )
 
+            # Create interface health card sensor (aggregated interface status view)
+            entities.append(
+                WrtManagerInterfaceHealthCardSensor(coordinator, router_host, router_name)
+            )
+
     async_add_entities(entities)
     _LOGGER.info("Set up %d sensors for %d routers", len(entities), len(routers))
 
@@ -1072,3 +1077,153 @@ class WrtManagerRouterTrafficCardSensor(WrtManagerSensorBase):
         }
 
         return attributes
+
+
+class WrtManagerInterfaceHealthCardSensor(WrtManagerSensorBase):
+    """Aggregated interface health data for the Interface Health card."""
+
+    def __init__(
+        self,
+        coordinator: WrtManagerCoordinator,
+        router_host: str,
+        router_name: str,
+    ):
+        """Initialize the interface health card sensor."""
+        super().__init__(
+            coordinator, router_host, router_name, "interface_health", "Interface Health"
+        )
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:lan"
+
+    @property
+    def native_value(self) -> int:
+        """Return count of up+carrier interfaces."""
+        attrs = self.extra_state_attributes
+        return attrs.get("up_count", 0)
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return interface health data for all interfaces on this router."""
+        data = self.coordinator.data or {}
+        raw_interfaces = data.get("interfaces", {}).get(self._router_host, {})
+        ip_map = data.get("interface_ips", {}).get(self._router_host, {})
+        dhcp_routers = data.get("dhcp_routers", [])
+        devices = data.get("devices", [])
+
+        # Build per-network device counts from coordinator devices
+        network_device_counts: Dict[str, int] = {}
+        for device in devices:
+            if device.get("router") == self._router_host:
+                net = device.get("network_name")
+                if net:
+                    network_device_counts[net] = network_device_counts.get(net, 0) + 1
+
+        interfaces = []
+        has_internet = False
+
+        for phys_name, iface_data in raw_interfaces.items():
+            # Skip radio* (wireless radio config) and loopback
+            if phys_name.startswith("radio") and phys_name[5:].isdigit():
+                continue
+            if phys_name == "lo":
+                continue
+            # Skip pure WiFi interfaces (phy*-ap*, wlan*)
+            if ("phy" in phys_name and "ap" in phys_name) or phys_name.startswith("wlan"):
+                continue
+            # Skip wireless status radio entries (have 'interfaces' key)
+            if isinstance(iface_data, dict) and "interfaces" in iface_data:
+                continue
+
+            up = iface_data.get("up", False)
+            carrier = iface_data.get("carrier", False)
+            if up and carrier:
+                status = "up"
+            elif up:
+                status = "no_carrier"
+            else:
+                status = "down"
+
+            # Get logical name and IP from interface dump map
+            ip_info = ip_map.get(phys_name, {})
+            logical_name = ip_info.get("logical", phys_name)
+            ip = ip_info.get("ip")
+
+            is_wan = self._is_wan_interface(phys_name) or logical_name == "wan"
+            if is_wan and up and carrier:
+                has_internet = True
+
+            stats = iface_data.get("statistics", {})
+            rx_bytes = stats.get("rx_bytes", 0) or 0
+            tx_bytes = stats.get("tx_bytes", 0) or 0
+            rx_errors = stats.get("rx_errors", 0) or 0
+            tx_errors = stats.get("tx_errors", 0) or 0
+
+            # Classify bridge members as wired or wireless
+            bridge_members = iface_data.get("bridge-members", [])
+            has_wired = any(m.startswith("eth") or m.startswith("lan") for m in bridge_members) or (
+                not bridge_members and phys_name.startswith("eth")
+            )
+            has_wireless = any(
+                ("phy" in m and "ap" in m) or m.startswith("wlan") for m in bridge_members
+            )
+
+            # Device count for this logical network
+            device_count = network_device_counts.get(logical_name)
+
+            interfaces.append(
+                {
+                    "logical_name": logical_name,
+                    "physical_name": phys_name,
+                    "ip": ip,
+                    "status": status,
+                    "up": up,
+                    "carrier": carrier,
+                    "is_wan": is_wan,
+                    "has_wired": has_wired,
+                    "has_wireless": has_wireless,
+                    "bridge_members": bridge_members,
+                    "rx_errors": rx_errors,
+                    "tx_errors": tx_errors,
+                    "rx_bytes_mb": round(rx_bytes / (1024 * 1024), 1),
+                    "tx_bytes_mb": round(tx_bytes / (1024 * 1024), 1),
+                    "device_count": device_count,
+                }
+            )
+
+        # Sort: WAN first, then bridges, then ethernet, then other
+        interfaces.sort(key=lambda x: self._iface_sort_key(x["physical_name"], x["is_wan"]))
+
+        has_dhcp = self._router_host in dhcp_routers
+        if has_internet:
+            role = "internet"
+        elif has_dhcp:
+            role = "dhcp"
+        else:
+            role = "ap"
+
+        up_count = sum(1 for i in interfaces if i["status"] == "up")
+
+        return {
+            "interfaces": interfaces,
+            "router_role": role,
+            "has_internet": has_internet,
+            "has_dhcp": has_dhcp,
+            "interface_count": len(interfaces),
+            "up_count": up_count,
+        }
+
+    @staticmethod
+    def _is_wan_interface(phys_name: str) -> bool:
+        """Check if interface name suggests WAN."""
+        return "wan" in phys_name.lower()
+
+    @staticmethod
+    def _iface_sort_key(phys_name: str, is_wan: bool) -> int:
+        """Sort key: WAN first, then bridges, then ethernet, then other."""
+        if is_wan:
+            return 0
+        if phys_name.startswith("br-"):
+            return 1
+        if phys_name.startswith("eth"):
+            return 2
+        return 3

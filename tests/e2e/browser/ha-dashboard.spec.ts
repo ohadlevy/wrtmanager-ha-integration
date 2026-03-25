@@ -92,6 +92,8 @@ async function screenshotCard(page: Page, cardTag: string, screenshotPath: strin
     // Use a broad locator and filter by the card tag presence.
     const card = page.locator(cardTag).first();
     await card.waitFor({ state: 'visible', timeout: 10000 });
+    await card.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
     await card.screenshot({ path: screenshotPath });
   } catch {
     // Fallback: full page screenshot if card element not found
@@ -161,6 +163,16 @@ test.describe('WrtManager Dashboard Cards', () => {
       page,
       'roaming-activity-card',
       path.join(SCREENSHOT_DIR, `roaming-activity-${testInfo.project.name}.png`),
+    );
+  });
+
+  test('interface-health-card renders', async ({ page }, testInfo) => {
+    await page.goto(`${HA_URL}/lovelace/network`);
+    await page.waitForTimeout(5000);
+    await screenshotCard(
+      page,
+      'interface-health-card',
+      path.join(SCREENSHOT_DIR, `interface-health-${testInfo.project.name}.png`),
     );
   });
 

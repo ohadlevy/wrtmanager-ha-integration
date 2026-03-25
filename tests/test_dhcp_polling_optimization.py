@@ -144,6 +144,7 @@ class TestDHCPPollingOptimization:
             client.get_system_board = AsyncMock(return_value={})
             client.get_network_interfaces = AsyncMock(return_value={})
             client.get_wireless_status = AsyncMock(return_value={})
+            client.get_interface_dump = AsyncMock(return_value={})
 
             # Mock DHCP calls based on expected responses
             dhcp_leases, static_hosts = dhcp_responses[host]
@@ -179,6 +180,7 @@ class TestDHCPPollingOptimization:
         client.get_system_board = AsyncMock(return_value={})
         client.get_network_interfaces = AsyncMock(return_value={})
         client.get_wireless_status = AsyncMock(return_value={})
+        client.get_interface_dump = AsyncMock(return_value={})
         client.get_dhcp_leases = AsyncMock(return_value=None)
         client.get_static_dhcp_hosts = AsyncMock(return_value=None)
 
@@ -204,6 +206,7 @@ class TestDHCPPollingOptimization:
         client.get_system_board = AsyncMock(return_value={})
         client.get_network_interfaces = AsyncMock(return_value={})
         client.get_wireless_status = AsyncMock(return_value={})
+        client.get_interface_dump = AsyncMock(return_value={})
         client.get_dhcp_leases = AsyncMock(return_value=None)
         client.get_static_dhcp_hosts = AsyncMock(return_value=None)
 
@@ -234,12 +237,12 @@ class TestDHCPPollingOptimization:
         async def mock_collect_data(host, session_id):
             if host == "192.168.1.1":
                 # DHCP server failed - return no DHCP data
-                return [], {}, {"uptime": 12345}, {}
+                return [], {}, {"uptime": 12345}, {}, {}
             elif host == "192.168.1.2":
                 # This will be tested in fallback
-                return [], {}, {"uptime": 12345}, {}
+                return [], {}, {"uptime": 12345}, {}, {}
             else:
-                return [], {}, {"uptime": 12345}, {}
+                return [], {}, {"uptime": 12345}, {}, {}
 
         coordinator._collect_router_data = AsyncMock(side_effect=mock_collect_data)
 
@@ -296,6 +299,7 @@ class TestDHCPPollingOptimization:
             client.get_system_board = AsyncMock(return_value={})
             client.get_network_interfaces = AsyncMock(return_value={})
             client.get_wireless_status = AsyncMock(return_value={})
+            client.get_interface_dump = AsyncMock(return_value={})
 
             if host == "192.168.1.1":
                 # Known DHCP server - should be queried
@@ -330,6 +334,7 @@ class TestDHCPPollingOptimization:
         client.get_system_board = AsyncMock(return_value={})
         client.get_network_interfaces = AsyncMock(return_value={})
         client.get_wireless_status = AsyncMock(return_value={})
+        client.get_interface_dump = AsyncMock(return_value={})
         client.get_dhcp_leases = AsyncMock(return_value=None)
         client.get_static_dhcp_hosts = AsyncMock(
             return_value={
@@ -364,6 +369,7 @@ class TestDHCPPollingOptimization:
         client.get_system_board = AsyncMock(return_value={})
         client.get_network_interfaces = AsyncMock(return_value={})
         client.get_wireless_status = AsyncMock(return_value={})
+        client.get_interface_dump = AsyncMock(return_value={})
         client.get_dhcp_leases = AsyncMock(side_effect=UbusClientError("DHCP query failed"))
         client.get_static_dhcp_hosts = AsyncMock(return_value=None)
 
@@ -400,6 +406,7 @@ class TestDHCPPollingOptimization:
             client.get_system_board = AsyncMock(return_value={})
             client.get_network_interfaces = AsyncMock(return_value={})
             client.get_wireless_status = AsyncMock(return_value={})
+            client.get_interface_dump = AsyncMock(return_value={})
             client.get_dhcp_leases = AsyncMock(
                 return_value={
                     "device": {
@@ -436,7 +443,9 @@ class TestDHCPPollingOptimization:
         coordinator._authenticate_router = AsyncMock(
             side_effect=lambda host, client: f"session_{host.split('.')[-1]}"
         )
-        coordinator._collect_router_data = AsyncMock(return_value=([], {}, {"uptime": 12345}, {}))
+        coordinator._collect_router_data = AsyncMock(
+            return_value=([], {}, {"uptime": 12345}, {}, {})
+        )
 
         # Mock fallback client to raise exception
         client = coordinator.routers["192.168.1.2"]

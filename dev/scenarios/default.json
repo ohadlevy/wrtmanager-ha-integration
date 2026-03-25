@@ -123,6 +123,7 @@
           "type": "bridge",
           "up": true,
           "carrier": true,
+          "bridge-members": ["eth0", "phy0-ap0", "phy0-ap1", "phy1-ap0", "phy1-ap1"],
           "statistics": {
             "rx_bytes": 52428800000,
             "tx_bytes": 26214400000,
@@ -130,6 +131,20 @@
             "tx_packets": 20000000,
             "rx_errors": 0,
             "tx_errors": 0
+          }
+        },
+        "br-guest": {
+          "type": "bridge",
+          "up": true,
+          "carrier": true,
+          "bridge-members": ["phy0-ap1", "phy1-ap1"],
+          "statistics": {
+            "rx_bytes": 1048576000,
+            "tx_bytes": 524288000,
+            "rx_packets": 800000,
+            "tx_packets": 400000,
+            "rx_errors": 0,
+            "tx_errors": 2
           }
         },
         "eth0": {
@@ -145,6 +160,14 @@
             "tx_errors": 0
           }
         }
+      },
+      "network_interface_dump": {
+        "interface": [
+          {"interface": "loopback", "l3_device": "lo", "ipv4-address": [{"address": "127.0.0.1", "mask": 8}]},
+          {"interface": "wan", "l3_device": "eth0", "ipv4-address": [{"address": "10.0.0.1", "mask": 24}], "route": [{"target": "0.0.0.0", "mask": 0}]},
+          {"interface": "lan", "l3_device": "br-lan", "ipv4-address": [{"address": "192.168.1.1", "mask": 24}]},
+          {"interface": "guest", "l3_device": "br-guest", "ipv4-address": [{"address": "192.168.5.1", "mask": 24}]}
+        ]
       },
       "dhcp_leases": [
         {"macaddr": "4C:FC:AA:13:D0:65", "ipaddr": "192.168.1.169", "hostname": "Tesla_Model_3", "expires": 42836},
@@ -305,6 +328,7 @@
           "type": "bridge",
           "up": true,
           "carrier": true,
+          "bridge-members": ["eth0", "phy0-ap0", "phy1-ap0"],
           "statistics": {
             "rx_bytes": 10485760000,
             "tx_bytes": 5242880000,
@@ -314,6 +338,11 @@
             "tx_errors": 0
           }
         }
+      },
+      "network_interface_dump": {
+        "interface": [
+          {"interface": "lan", "l3_device": "br-lan", "ipv4-address": [{"address": "192.168.1.2", "mask": 24}]}
+        ]
       },
       "associations": {
         "phy0-ap0": [
@@ -418,6 +447,7 @@
           "type": "bridge",
           "up": true,
           "carrier": true,
+          "bridge-members": ["eth0", "phy0-ap0", "phy1-ap0"],
           "statistics": {
             "rx_bytes": 5242880000,
             "tx_bytes": 2621440000,
@@ -426,7 +456,26 @@
             "rx_errors": 0,
             "tx_errors": 0
           }
+        },
+        "eth1": {
+          "type": "ethernet",
+          "up": true,
+          "carrier": false,
+          "statistics": {
+            "rx_bytes": 0,
+            "tx_bytes": 0,
+            "rx_packets": 0,
+            "tx_packets": 0,
+            "rx_errors": 5,
+            "tx_errors": 0
+          }
         }
+      },
+      "network_interface_dump": {
+        "interface": [
+          {"interface": "wan", "l3_device": "eth1", "ipv4-address": []},
+          {"interface": "lan", "l3_device": "br-lan", "ipv4-address": [{"address": "192.168.1.3", "mask": 24}]}
+        ]
       },
       "associations": {
         "phy0-ap0": [
