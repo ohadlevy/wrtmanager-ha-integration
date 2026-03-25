@@ -7,13 +7,10 @@ views:
     cards:
       - type: custom:network-devices-card
       - type: custom:router-health-card
+      - type: custom:network-topology-card
       - type: custom:signal-heatmap-card
       - type: custom:roaming-activity-card
-
-  - title: Topology
-    panel: true
-    cards:
-      - type: custom:network-topology-card
+      - type: custom:interface-health-card
 
   # Optional: Traffic details using standard HA cards
   # Replace YOUR_ROUTER with your router name (e.g., sensor.rutr_total_traffic)
