@@ -112,6 +112,7 @@
                 "key": "guestpass456",
                 "network": ["guest"],
                 "isolate": true,
+                "hidden": true,
                 "disabled": false
               }
             }

@@ -355,6 +355,7 @@ def setup_lovelace_dashboard(ha_url: str, token: str) -> bool:
                     if (
                         "custom:router-health-card" in views_json
                         and "custom:interface-health-card" in views_json
+                        and "custom:wifi-networks-card" in views_json
                     ):
                         _LOGGER.info("Lovelace dashboard already configured")
                         return True
@@ -377,6 +378,7 @@ def setup_lovelace_dashboard(ha_url: str, token: str) -> bool:
                                         {"type": "custom:signal-heatmap-card"},
                                         {"type": "custom:roaming-activity-card"},
                                         {"type": "custom:interface-health-card"},
+                                        {"type": "custom:wifi-networks-card"},
                                     ],
                                 }
                             ],
@@ -385,7 +387,7 @@ def setup_lovelace_dashboard(ha_url: str, token: str) -> bool:
                 )
                 result = await ws.receive_json()
                 if result.get("success"):
-                    _LOGGER.info("Lovelace dashboard created with 6 wrtmanager cards")
+                    _LOGGER.info("Lovelace dashboard created with 7 wrtmanager cards")
                     return True
                 _LOGGER.error("Dashboard creation failed: %s", result)
                 return False
