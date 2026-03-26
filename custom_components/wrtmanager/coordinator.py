@@ -32,7 +32,9 @@ from .const import (
     CONF_ROUTER_VERIFY_SSL,
     CONF_ROUTERS,
     CONNECTION_TYPE_WIFI,
+    CONNECTION_TYPE_WIRED,
     DATA_SOURCE_DYNAMIC_DHCP,
+    DATA_SOURCE_LIVE_ARP,
     DATA_SOURCE_STATIC_DHCP,
     DATA_SOURCE_WIFI_ONLY,
     DEFAULT_USE_HTTPS,
@@ -128,6 +130,8 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         system_info: Dict[str, Any] = {}
         interfaces: Dict[str, Any] = {}
         interface_ips: Dict[str, Any] = {}
+        host_hints: Optional[Dict[str, Any]] = None
+        dhcp_router_ip_map: Dict[str, Any] = {}
 
         for i, (host, result) in enumerate(zip(self.sessions.keys(), router_data_results)):
             if isinstance(result, Exception):
@@ -140,6 +144,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 router_system_data,
                 router_interface_data,
                 router_ip_map,
+                router_host_hints,
             ) = result
             all_devices.extend(wifi_devices)
 
@@ -156,6 +161,9 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             # Use DHCP data from the first router that provides it
             if not dhcp_data and router_dhcp_data:
                 dhcp_data = router_dhcp_data
+                if router_host_hints is not None:
+                    host_hints = router_host_hints
+                    dhcp_router_ip_map = router_ip_map
 
         # Fallback: If no DHCP data was collected, try other routers that haven't been tested yet
         if not dhcp_data:
@@ -201,6 +209,15 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
         enriched_devices = self._correlate_device_data(
             all_devices, dhcp_data, interface_network_map
         )
+
+        # Merge wired clients from host hints, excluding MACs already in WiFi assoclist
+        wifi_mac_set: Set[str] = {d[ATTR_MAC] for d in enriched_devices}
+        wired_devices: List[Dict[str, Any]] = []
+        if host_hints is not None:
+            wired_devices = self._build_wired_devices(
+                host_hints, wifi_mac_set, dhcp_data, dhcp_router_ip_map
+            )
+        enriched_devices = enriched_devices + wired_devices
 
         # Update roaming detection
         self._update_roaming_detection(enriched_devices)
@@ -266,9 +283,14 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
                 await asyncio.sleep(delay)
 
-    async def _collect_router_data(
-        self, host: str, session_id: str
-    ) -> tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    async def _collect_router_data(self, host: str, session_id: str) -> tuple[
+        List[Dict[str, Any]],
+        Dict[str, Any],
+        Dict[str, Any],
+        Dict[str, Any],
+        Dict[str, Any],
+        Optional[Dict[str, Any]],
+    ]:
         """Collect data from a single router."""
         client = self.routers[host]
         wifi_devices = []
@@ -379,6 +401,16 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
             else:
                 _LOGGER.debug("Router %s - skipping DHCP query (not a DHCP server)", host)
 
+            # Host hints — all ARP+DHCP hosts from main/DHCP router via luci-rpc
+            host_hints: Optional[Dict[str, Any]] = None
+            if host in self._dhcp_routers:
+                host_hints = await client.get_host_hints(session_id)
+                _LOGGER.debug(
+                    "Router %s - host hints: %d entries",
+                    host,
+                    len(host_hints) if host_hints else 0,
+                )
+
         except Exception as ex:
             _LOGGER.error("Error collecting data from %s: %s", host, ex)
             raise UpdateFailed(f"Data collection failed for {host}: {ex}")
@@ -397,7 +429,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                         ip_str = f"{a['address']}/{a['mask']}"
                     ip_map[l3dev] = {"ip": ip_str, "logical": logical}
 
-        return wifi_devices, dhcp_data, system_data, interface_data, ip_map
+        return wifi_devices, dhcp_data, system_data, interface_data, ip_map, host_hints
 
     def _parse_dhcp_data(
         self, dhcp_leases: Optional[Dict], static_hosts: Optional[Dict]
@@ -522,6 +554,101 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
         _LOGGER.debug("Interface-to-network map: %s", network_map)
         return network_map
+
+    @staticmethod
+    def _build_subnet_map(ip_map: Dict[str, Any]) -> List[tuple]:
+        """Build list of (network, logical_name) from interface dump ip_map.
+
+        ip_map format: {physical_device: {"ip": "192.168.1.1/24", "logical": "lan"}}
+        Returns sorted list (longest prefix first) for longest-match lookup.
+        """
+        import ipaddress
+
+        subnets = []
+        for _phys, info in ip_map.items():
+            ip_str = info.get("ip")
+            logical = info.get("logical")
+            if not ip_str or not logical:
+                continue
+            try:
+                network = ipaddress.ip_interface(ip_str).network
+                subnets.append((network, logical))
+            except ValueError:
+                continue
+        subnets.sort(key=lambda x: x[0].prefixlen, reverse=True)
+        return subnets
+
+    @staticmethod
+    def _ip_to_network(ip: str, subnets: List[tuple]) -> Optional[str]:
+        """Find logical network name for an IP using longest-prefix match."""
+        import ipaddress
+
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return None
+        for network, logical in subnets:
+            if addr in network:
+                return logical
+        return None
+
+    def _build_wired_devices(
+        self,
+        host_hints: Dict[str, Any],
+        wifi_mac_set: Set[str],
+        dhcp_data: Dict[str, Any],
+        ip_map: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Build wired device records from host hints not in the WiFi assoclist.
+
+        Hostname priority:
+        1. Static DHCP reservation name  (DATA_SOURCE_STATIC_DHCP)
+        2. Dynamic DHCP lease hostname   (DATA_SOURCE_DYNAMIC_DHCP)
+        3. dnsmasq name from host hints  (DATA_SOURCE_LIVE_ARP, may be empty)
+        """
+        subnet_map = self._build_subnet_map(ip_map)
+        wired = []
+
+        for mac_raw, hints in host_hints.items():
+            mac = mac_raw.upper()
+            if mac in wifi_mac_set:
+                continue  # Already tracked as WiFi
+
+            ipaddrs = hints.get("ipaddrs", [])
+            ip = ipaddrs[0] if ipaddrs else None
+            if not ip:
+                continue  # No IP = cannot place on a network
+
+            network_name = self._ip_to_network(ip, subnet_map)
+
+            device: Dict[str, Any] = {
+                ATTR_MAC: mac,
+                ATTR_IP: ip,
+                ATTR_CONNECTED: True,
+                ATTR_CONNECTION_TYPE: CONNECTION_TYPE_WIRED,
+                ATTR_NETWORK_NAME: network_name,
+                ATTR_LAST_SEEN: datetime.now(),
+            }
+
+            # Hostname priority: DHCP data (static reservation or dynamic lease) > hints name
+            if mac in dhcp_data:
+                dhcp_entry = dhcp_data[mac]
+                device[ATTR_HOSTNAME] = dhcp_entry.get(ATTR_HOSTNAME, "")
+                device[ATTR_DATA_SOURCE] = dhcp_entry.get(ATTR_DATA_SOURCE, DATA_SOURCE_LIVE_ARP)
+            else:
+                # Static-IP device: use dnsmasq name if known (ARP snooping / /etc/hosts)
+                device[ATTR_HOSTNAME] = hints.get("name", "")
+                device[ATTR_DATA_SOURCE] = DATA_SOURCE_LIVE_ARP
+
+            device_info = self.device_manager.identify_device(mac)
+            if device_info:
+                device[ATTR_VENDOR] = device_info.get("vendor")
+                device[ATTR_DEVICE_TYPE] = device_info.get("device_type")
+
+            wired.append(device)
+            _LOGGER.debug("Wired client from host hints: %s (%s) on %s", mac, ip, network_name)
+
+        return wired
 
     def _update_roaming_detection(self, devices: List[Dict[str, Any]]) -> None:
         """Update roaming detection for devices."""

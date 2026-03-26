@@ -5,11 +5,20 @@
 views:
   - title: Network
     cards:
+      # WiFi clients grouped by AP (signal, disconnect) + wired clients by network
       - type: custom:network-devices-card
+
+      # Router health: memory, load, temperature, traffic, device count
       - type: custom:router-health-card
+
+      # Network interface status: IP, media, up/down per router
+      - type: custom:interface-health-card
+
+      # Signal strength with quality filter (Excellent/Good/Fair/Poor)
       - type: custom:signal-heatmap-card
+
+      # Active roamers + live event log of AP changes
       - type: custom:roaming-activity-card
-      - type: custom:wifi-networks-card
 
   - title: Topology
     panel: true

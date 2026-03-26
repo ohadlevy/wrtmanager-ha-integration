@@ -38,12 +38,13 @@ _LOGGER = logging.getLogger("mock-ubus")
 class MockRouter:
     """Simulates a single OpenWrt router's ubus interface."""
 
-    def __init__(self, router_id: str, config: dict):
+    def __init__(self, router_id: str, config: dict, scenario_path: str = ""):
         self.router_id = router_id
         self.config = config
         self.name = config["name"]
         self.sessions: dict[str, float] = {}  # session_id -> expiry timestamp
         self.start_time = time.time()
+        self._scenario_path = scenario_path
 
         # Deep copy associations so time events can mutate them
         self.associations = copy.deepcopy(config.get("associations", {}))
@@ -124,7 +125,7 @@ class MockRouter:
                                 "dhcp": ["ipv4leases", "ipv6leases"],
                                 "hostapd.*": ["get_clients", "del_client"],
                                 "iwinfo": ["assoclist", "devices", "info"],
-                                "luci-rpc": ["getDHCPLeases"],
+                                "luci-rpc": ["getDHCPLeases", "getHostHints"],
                                 "network.device": ["status"],
                                 "network.wireless": ["status"],
                                 "session": ["login", "access"],
@@ -149,6 +150,7 @@ class MockRouter:
             ("network.interface", "dump"): self._handle_network_interface_dump,
             ("network.wireless", "status"): self._handle_wireless_status,
             ("luci-rpc", "getDHCPLeases"): self._handle_dhcp_leases,
+            ("luci-rpc", "getHostHints"): self._handle_host_hints,
             ("dhcp", "ipv4leases"): self._handle_dhcp_ipv4leases,
             ("uci", "get"): self._handle_uci_get,
             ("file", "read"): self._handle_file_read,
@@ -239,6 +241,21 @@ class MockRouter:
         all_leases = self.dhcp_leases + self.extra_dhcp_leases
         return {"dhcp_leases": all_leases}
 
+    def _handle_host_hints(self, params: dict) -> dict | None:
+        if not self.config.get("is_dhcp_server", False):
+            return {}
+        # Re-read from scenario file on each call so changes made after server
+        # startup (e.g. during development) are reflected without a restart.
+        if self._scenario_path:
+            try:
+                with open(self._scenario_path) as f:
+                    scenario = json.load(f)
+                router_config = scenario.get("routers", {}).get(self.router_id, {})
+                return router_config.get("host_hints", {})
+            except Exception:
+                pass
+        return self.config.get("host_hints", {})
+
     def _handle_dhcp_ipv4leases(self, params: dict) -> dict | None:
         if not self.config.get("is_dhcp_server", False):
             return None
@@ -318,7 +335,7 @@ class MockUbusServerManager:
 
         port = self.base_port
         for router_id, router_config in scenario.get("routers", {}).items():
-            self.routers[router_id] = MockRouter(router_id, router_config)
+            self.routers[router_id] = MockRouter(router_id, router_config, self.scenario_path)
             self.router_ports[router_id] = port
             port += 1
 

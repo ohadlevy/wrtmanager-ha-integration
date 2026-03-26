@@ -351,8 +351,13 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
         )
       : allDevices;
 
+    // Separate WiFi and wired — wired have no AP and are rendered separately
+    const wifiDevices = devices.filter((d) => d.connectionType !== "wired");
+    const wiredDevices = devices.filter((d) => d.connectionType === "wired");
+
+    // WiFi: group by AP (existing logic, unchanged)
     const groups = {};
-    for (const d of devices) {
+    for (const d of wifiDevices) {
       if (!groups[d.ap]) groups[d.ap] = [];
       groups[d.ap].push(d);
     }
@@ -370,7 +375,18 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
       return this.getApName(a).localeCompare(this.getApName(b));
     });
 
-    return { devices, groups, sortedAps };
+    // Wired: group by network name, sorted alphabetically within each group
+    const wiredGroups = {};
+    for (const d of wiredDevices) {
+      const net = d.network || "unknown";
+      if (!wiredGroups[net]) wiredGroups[net] = [];
+      wiredGroups[net].push(d);
+    }
+    for (const net in wiredGroups) {
+      wiredGroups[net].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+
+    return { devices, groups, sortedAps, wiredGroups };
   }
 
   _getNetworkSummary(devices) {
@@ -468,9 +484,69 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
     `;
   }
 
+  _renderWiredSection(wiredGroups) {
+    const totalWired = Object.values(wiredGroups).reduce((n, g) => n + g.length, 0);
+    if (totalWired === 0) return "";
+    const sortedNets = Object.keys(wiredGroups).sort();
+    return html`
+      <div class="ndc-group">
+        <div class="ndc-group-header">
+          <span class="ndc-ap-name">
+            <ha-icon icon="mdi:ethernet" style="--mdc-icon-size: 20px;"></ha-icon>
+            Wired Clients
+          </span>
+          <span class="ndc-count">(${totalWired})</span>
+        </div>
+        ${sortedNets.map((net) => html`
+          ${sortedNets.length > 1
+            ? html`<div class="ndc-wired-net-label">${this._getNetworkLabel(net)}</div>`
+            : ""}
+          <div class="ndc-list">
+            ${wiredGroups[net].map((d) => this._renderWiredRow(d))}
+          </div>
+        `)}
+      </div>
+    `;
+  }
+
+  _renderWiredRow(d) {
+    const networkLabel = this._getNetworkLabel(d.network);
+    const subtitle = [d.vendor, d.areaName].filter(Boolean).join(" \u00B7 ");
+    return html`
+      <div
+        class="ndc-row ndc-clickable ${d.online ? "" : "ndc-offline"}"
+        @click=${() => this._onDeviceClick(d)}
+        title=${d.haDeviceId ? "Open device page" : "Show entity details"}
+      >
+        <ha-icon
+          icon=${this._typeIcon(d.deviceType)}
+          class="ndc-type-icon"
+          title=${d.deviceType}
+        ></ha-icon>
+        <div class="ndc-device-info">
+          <span class="ndc-device-name">
+            ${d.name}
+            ${this._renderIntegrationBadges(d.otherIntegrations)}
+          </span>
+          <span class="ndc-device-meta">
+            ${d.ip !== "-" ? html`<span class="ndc-ip">${d.ip}</span>` : ""}
+            <ha-icon
+              icon="mdi:ethernet"
+              style="--mdc-icon-size: 14px; color: var(--secondary-text-color);"
+            ></ha-icon>
+            ${networkLabel !== "-"
+              ? html`<span class="ndc-net">${networkLabel}</span>`
+              : ""}
+            ${subtitle ? html`<span class="ndc-meta-sub">${subtitle}</span>` : ""}
+          </span>
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     const allDevices = this._getDevices();
-    const { devices, groups, sortedAps } = this._getFilteredGroups(allDevices);
+    const { devices, groups, sortedAps, wiredGroups } = this._getFilteredGroups(allDevices);
     const networkSummary = this._getNetworkSummary(allDevices);
 
     return html`
@@ -515,6 +591,7 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
               </div>
             `;
           })}
+          ${this._renderWiredSection(wiredGroups)}
         </div>
       </ha-card>
     `;
@@ -559,6 +636,7 @@ class NetworkDevicesCard extends WrtManagerMixin(LitElement) {
       .ndc-disconnect { --mdc-icon-size: 16px; color: var(--secondary-text-color); opacity: 0.3; cursor: pointer; padding: 4px; border-radius: 4px; flex-shrink: 0; }
       .ndc-disconnect:hover { opacity: 1; color: var(--error-color, #f44336); background: rgba(244,67,54,0.1); }
       .ndc-no-results { color: var(--secondary-text-color); text-align: center; padding: 24px; font-style: italic; }
+      .ndc-wired-net-label { font-size: 0.75em; text-transform: uppercase; color: var(--secondary-text-color); padding: 6px 0 2px 2px; letter-spacing: 0.05em; }
     `;
   }
 
@@ -1956,7 +2034,7 @@ customElements.define("wifi-networks-card-editor", WifiNetworksCardEditor);
 
 window.customCards = window.customCards || [];
 window.customCards.push(
-  { type: "network-devices-card", name: "Network Devices", description: "WiFi devices grouped by access point with HA cross-linking", preview: true },
+  { type: "network-devices-card", name: "Network Devices", description: "All network clients — WiFi grouped by AP with signal/disconnect, wired clients grouped by network segment", preview: true },
   { type: "router-health-card", name: "Router Health", description: "Router health overview with memory, load, devices, temperature, traffic", preview: true },
   { type: "network-topology-card", name: "Network Topology", description: "Visual network topology with signal quality color coding", preview: true },
   { type: "signal-heatmap-card", name: "Signal Heatmap", description: "Signal strength list with quality filtering and sorting", preview: true },

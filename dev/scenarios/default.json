@@ -167,7 +167,8 @@
           {"interface": "loopback", "l3_device": "lo", "ipv4-address": [{"address": "127.0.0.1", "mask": 8}]},
           {"interface": "wan", "l3_device": "eth0", "ipv4-address": [{"address": "10.0.0.1", "mask": 24}], "route": [{"target": "0.0.0.0", "mask": 0}]},
           {"interface": "lan", "l3_device": "br-lan", "ipv4-address": [{"address": "192.168.1.1", "mask": 24}]},
-          {"interface": "guest", "l3_device": "br-guest", "ipv4-address": [{"address": "192.168.5.1", "mask": 24}]}
+          {"interface": "iot", "l3_device": "br-iot", "ipv4-address": [{"address": "192.168.5.1", "mask": 24}]},
+          {"interface": "guest", "l3_device": "br-guest", "ipv4-address": [{"address": "192.168.2.1", "mask": 24}]}
         ]
       },
       "dhcp_leases": [
@@ -236,6 +237,17 @@
           {"mac": "94:9F:3E:0F:27:74", "signal": -44, "rx": {"rate": 433300}, "tx": {"rate": 433300}}
         ],
         "phy1-ap1": []
+      },
+      "host_hints": {
+        "DC:A6:32:D9:75:66": {"name": "homeassistant",  "ipaddrs": ["192.168.1.10"],  "ip6addrs": []},
+        "F4:9D:8A:83:8F:7D": {"name": "anker-solix",    "ipaddrs": ["192.168.1.20"],  "ip6addrs": []},
+        "28:B7:7C:1E:A6:C9": {"name": "solaredge",      "ipaddrs": ["192.168.1.30"],  "ip6addrs": []},
+        "B8:27:EB:00:00:01": {"name": "",               "ipaddrs": ["192.168.1.50"],  "ip6addrs": []},
+        "4C:82:A9:DF:EF:43": {"name": "BrotherPrinter", "ipaddrs": ["192.168.1.189"], "ip6addrs": []},
+        "C8:5A:CF:81:57:02": {"name": "HP-Laptop",      "ipaddrs": ["192.168.1.229"], "ip6addrs": []},
+        "AA:BB:CC:00:00:01": {"name": "iot-sensor",     "ipaddrs": ["192.168.5.100"], "ip6addrs": []},
+        "9A:50:0E:F2:D4:45": {"name": "MacBookAir",     "ipaddrs": ["192.168.1.195"], "ip6addrs": []},
+        "4E:5C:42:0D:BB:1D": {"name": "iPhone-Tom",     "ipaddrs": ["192.168.1.220"], "ip6addrs": []}
       }
     },
     "router2": {
