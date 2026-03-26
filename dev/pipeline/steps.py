@@ -5,6 +5,7 @@ Each step is an async function: (RunConfig, RunContext) -> RunState
 
 import asyncio
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -790,11 +791,14 @@ async def step_create_pr(config: RunConfig, ctx: RunContext) -> RunState:
     """Squash commits, rebase, push, and create PR."""
     wt = ctx.worktree_path
 
-    # Commit any uncommitted changes (test file updates, etc.)
+    # Commit any modified tracked files (not untracked junk like .plan.md)
     try:
         status = _git_output(wt, "status", "--porcelain")
-        if status.strip():
-            _git_run(wt, "add", "-A")
+        modified = [
+            line[3:] for line in status.splitlines() if line and line[0] in " M" and line[1] in "MD"
+        ]
+        if modified:
+            _git_run(wt, "add", *modified)
             _git_run(
                 wt,
                 "commit",
@@ -802,7 +806,7 @@ async def step_create_pr(config: RunConfig, ctx: RunContext) -> RunState:
                 "-m",
                 "Include test and config updates from review fixes",
             )
-            logger.info("Committed uncommitted changes before squash")
+            logger.info("Committed %d modified files before squash", len(modified))
     except subprocess.CalledProcessError:
         pass
 
@@ -1010,12 +1014,17 @@ def _git_output(worktree: Path, *args: str) -> str:
     return result.stdout
 
 
+# Env that prevents git from opening an editor
+_GIT_ENV = {**os.environ, "GIT_EDITOR": "true", "GIT_TERMINAL_PROMPT": "0"}
+
+
 def _git_run(worktree: Path, *args: str):
     subprocess.run(
         ["git", "-C", str(worktree)] + list(args),
         check=True,
         capture_output=True,
         text=True,
+        env=_GIT_ENV,
     )
 
 
@@ -1024,6 +1033,7 @@ def _git_run_in_repo(repo: Path, *args: str):
         ["git", "-C", str(repo)] + list(args),
         capture_output=True,
         text=True,
+        env=_GIT_ENV,
     )
 
 

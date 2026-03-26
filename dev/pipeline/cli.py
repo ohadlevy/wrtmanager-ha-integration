@@ -87,24 +87,46 @@ async def cmd_run(args):
     return 0 if result == RunState.PASSED else 1
 
 
+def find_worktree(issue: int = None, worktree_path: str = None, base: Path = None):
+    """Find worktree by issue number or path. Returns Path or None."""
+    if issue:
+        wt_base = (base or Path.cwd()) / ".claude" / "worktrees"
+        matches = [
+            d
+            for d in (wt_base.iterdir() if wt_base.exists() else [])
+            if d.is_dir() and d.name.startswith(f"{issue}-")
+        ]
+        return matches[0] if matches else None
+    elif worktree_path:
+        return Path(worktree_path)
+    return None
+
+
 async def cmd_resume(args):
     """Resume a pipeline from after planning (has .plan.md)."""
-    worktree = Path(args.worktree)
+    issue = getattr(args, "issue", None)
+    worktree = find_worktree(issue, getattr(args, "worktree", None))
+
+    if worktree is None:
+        print("Provide an issue number or --worktree path")
+        return 1
+
     if not worktree.exists():
         print(f"Worktree not found: {worktree}")
         return 1
 
     plan_file = worktree / ".plan.md"
     if not plan_file.exists():
-        print("No .plan.md found in worktree")
+        print(f"No .plan.md found in {worktree}")
         return 1
 
-    # Extract issue number from worktree name
-    name = worktree.name
-    issue = int(name.split("-")[0]) if name[0].isdigit() else 0
-    if issue == 0:
-        print(f"Cannot determine issue number from worktree name: {name}")
-        return 1
+    # Extract issue number from worktree name if not provided
+    if not issue:
+        name = worktree.name
+        issue = int(name.split("-")[0]) if name[0].isdigit() else 0
+        if issue == 0:
+            print(f"Cannot determine issue number from: {name}")
+            return 1
 
     config = RunConfig(
         issue_number=issue,
@@ -204,7 +226,8 @@ def main():
 
     # resume
     resume_parser = subparsers.add_parser("resume", help="Resume after planning", parents=[shared])
-    resume_parser.add_argument("--worktree", required=True, help="Worktree path")
+    resume_parser.add_argument("issue", type=int, nargs="?", help="GitHub issue number")
+    resume_parser.add_argument("--worktree", help="Worktree path (alternative to issue number)")
     resume_parser.add_argument(
         "--from",
         dest="start_from",
