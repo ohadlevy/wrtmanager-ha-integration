@@ -394,6 +394,16 @@ class UbusClient:
         # del_client returns empty dict {} on success, None on failure
         return result is not None
 
+    async def get_host_hints(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get all network hosts known to dnsmasq via luci-rpc.getHostHints.
+
+        Returns MAC -> {name, ipaddrs, ip6addrs} for ARP+DHCP combined.
+        Requires luci-rpc (same dependency as getDHCPLeases).
+        Only called on the DHCP/main router.
+        """
+        result = await self.call_ubus(session_id, "luci-rpc", "getHostHints", {})
+        return result if result is not None else None
+
     async def close(self) -> None:
         """Close the HTTP session."""
         if self._session:

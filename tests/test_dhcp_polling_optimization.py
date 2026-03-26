@@ -150,6 +150,7 @@ class TestDHCPPollingOptimization:
             dhcp_leases, static_hosts = dhcp_responses[host]
             client.get_dhcp_leases = AsyncMock(return_value=dhcp_leases)
             client.get_static_dhcp_hosts = AsyncMock(return_value=static_hosts)
+            client.get_host_hints = AsyncMock(return_value=None)
 
         # Call _collect_router_data for each router
         for host, session_id in coordinator.sessions.items():
@@ -237,12 +238,12 @@ class TestDHCPPollingOptimization:
         async def mock_collect_data(host, session_id):
             if host == "192.168.1.1":
                 # DHCP server failed - return no DHCP data
-                return [], {}, {"uptime": 12345}, {}, {}
+                return [], {}, {"uptime": 12345}, {}, {}, None
             elif host == "192.168.1.2":
                 # This will be tested in fallback
-                return [], {}, {"uptime": 12345}, {}, {}
+                return [], {}, {"uptime": 12345}, {}, {}, None
             else:
-                return [], {}, {"uptime": 12345}, {}, {}
+                return [], {}, {"uptime": 12345}, {}, {}, None
 
         coordinator._collect_router_data = AsyncMock(side_effect=mock_collect_data)
 
@@ -307,6 +308,7 @@ class TestDHCPPollingOptimization:
                     return_value={"device": {"leases": [{"macaddr": "aa:bb:cc:dd:ee:ff"}]}}
                 )
                 client.get_static_dhcp_hosts = AsyncMock(return_value=None)
+                client.get_host_hints = AsyncMock(return_value=None)
             else:
                 # Non-DHCP routers - should NOT be queried
                 client.get_dhcp_leases = AsyncMock(return_value=None)
@@ -336,6 +338,7 @@ class TestDHCPPollingOptimization:
         client.get_wireless_status = AsyncMock(return_value={})
         client.get_interface_dump = AsyncMock(return_value={})
         client.get_dhcp_leases = AsyncMock(return_value=None)
+        client.get_host_hints = AsyncMock(return_value=None)
         client.get_static_dhcp_hosts = AsyncMock(
             return_value={
                 "values": {
@@ -420,6 +423,7 @@ class TestDHCPPollingOptimization:
                 }
             )
             client.get_static_dhcp_hosts = AsyncMock(return_value=None)
+            client.get_host_hints = AsyncMock(return_value=None)
 
         # Collect data from both routers
         for host, session_id in coordinator.sessions.items():
@@ -444,7 +448,7 @@ class TestDHCPPollingOptimization:
             side_effect=lambda host, client: f"session_{host.split('.')[-1]}"
         )
         coordinator._collect_router_data = AsyncMock(
-            return_value=([], {}, {"uptime": 12345}, {}, {})
+            return_value=([], {}, {"uptime": 12345}, {}, {}, None)
         )
 
         # Mock fallback client to raise exception
@@ -461,3 +465,62 @@ class TestDHCPPollingOptimization:
         # Verify update completed successfully despite fallback failure
         assert "devices" in result
         assert "system_info" in result
+
+    @pytest.mark.asyncio
+    async def test_host_hints_called_on_dhcp_router(self, coordinator):
+        """getHostHints is called for DHCP routers but not AP-only routers."""
+        coordinator.sessions = {
+            "192.168.1.1": "session1",
+            "192.168.1.2": "session2",
+        }
+        sample_hints = {
+            "AA:BB:CC:DD:EE:01": {
+                "name": "nas",
+                "ipaddrs": ["192.168.1.50"],
+                "ip6addrs": [],
+            },
+        }
+
+        # Router 1: DHCP server with host hints
+        dhcp_client = coordinator.routers["192.168.1.1"]
+        dhcp_client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
+        dhcp_client.get_device_associations = AsyncMock(return_value=[])
+        dhcp_client.get_system_info = AsyncMock(return_value={})
+        dhcp_client.get_system_board = AsyncMock(return_value={})
+        dhcp_client.get_network_interfaces = AsyncMock(return_value={})
+        dhcp_client.get_wireless_status = AsyncMock(return_value={})
+        dhcp_client.get_interface_dump = AsyncMock(return_value={})
+        dhcp_client.get_dhcp_leases = AsyncMock(
+            return_value={
+                "device": {"leases": [{"macaddr": "aa:bb:cc:dd:ee:ff", "ipaddr": "192.168.1.100"}]}
+            }
+        )
+        dhcp_client.get_static_dhcp_hosts = AsyncMock(return_value=None)
+        dhcp_client.get_host_hints = AsyncMock(return_value=sample_hints)
+
+        # Router 2: AP-only (no DHCP)
+        ap_client = coordinator.routers["192.168.1.2"]
+        ap_client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
+        ap_client.get_device_associations = AsyncMock(return_value=[])
+        ap_client.get_system_info = AsyncMock(return_value={})
+        ap_client.get_system_board = AsyncMock(return_value={})
+        ap_client.get_network_interfaces = AsyncMock(return_value={})
+        ap_client.get_wireless_status = AsyncMock(return_value={})
+        ap_client.get_interface_dump = AsyncMock(return_value={})
+        ap_client.get_dhcp_leases = AsyncMock(return_value=None)
+        ap_client.get_static_dhcp_hosts = AsyncMock(return_value=None)
+        ap_client.get_host_hints = AsyncMock(return_value=None)
+
+        # DHCP router: getHostHints called, data propagated in 6-tuple
+        _, _, _, _, _, host_hints = await coordinator._collect_router_data(
+            "192.168.1.1", "session1"
+        )
+        dhcp_client.get_host_hints.assert_called_once()
+        assert host_hints == sample_hints
+
+        # AP-only router: getHostHints NOT called, None returned
+        _, _, _, _, _, ap_host_hints = await coordinator._collect_router_data(
+            "192.168.1.2", "session2"
+        )
+        ap_client.get_host_hints.assert_not_called()
+        assert ap_host_hints is None
