@@ -95,6 +95,26 @@ except Exception as ex:
     echo "Diagnostics captured ($line_count lines) → .diagnostics.txt"
 }
 
+# --- Helper: wait for entities to appear after HA restart ---
+# HA API responding ≠ integration loaded ≠ first data poll complete.
+# Without this, diagnostics/screenshots capture a transient "0 entities" state.
+wait_for_entities() {
+    local ha_url="$1" ha_token="$2" max_wait="${3:-60}"
+    echo "Waiting for wrtmanager entities to load (up to ${max_wait}s)..."
+    for i in $(seq 1 "$max_wait"); do
+        local count
+        count=$(curl -s -H "Authorization: Bearer $ha_token" "$ha_url/api/states" 2>/dev/null | \
+            $VENV -c "import json,sys; e=json.load(sys.stdin); print(len([x for x in e if 'wrtmanager' in x.get('entity_id','')]))" 2>/dev/null || echo "0")
+        if [[ "$count" -gt 0 ]]; then
+            echo "  $count entities loaded after ${i}s"
+            return 0
+        fi
+        sleep 1
+    done
+    echo "  WARNING: No entities after ${max_wait}s"
+    return 1
+}
+
 # --- Helper: smoke test (returns 0 if OK, 1 if issues found) ---
 smoke_test() {
     local ha_url="$1" ha_token="$2" worktree="$3"
@@ -186,6 +206,10 @@ ISSUE_TEXT="# ${ISSUE_TITLE}
 
 ${ISSUE_BODY}"
 
+# Use worktree's setup-ha.py (it knows about new cards added by the branch)
+SETUP_HA="$WORKTREE_PATH/dev/setup-ha.py"
+[[ -f "$SETUP_HA" ]] || SETUP_HA="$SCRIPT_DIR/setup-ha.py"
+
 PLAN_FILE="$WORKTREE_PATH/.plan.md"
 PLAN_TEXT=""
 if [[ -f "$PLAN_FILE" ]]; then
@@ -251,6 +275,17 @@ if [[ -n "$HA_URL" ]]; then
             fi
             sleep 2
         done
+
+        # Update Lovelace dashboard to pick up any new cards added since initial setup
+        MOCK_PORT_FILE="$WORKTREE_PATH/.mock-ports.json"
+        if [[ -f "$MOCK_PORT_FILE" ]]; then
+            echo "Updating Lovelace dashboard..."
+            $VENV "$SETUP_HA" \
+                --ha-url "$HA_URL" \
+                --mock-port-file "$MOCK_PORT_FILE" \
+                --token-file "$WORKTREE_PATH/.ha-token" \
+                --skip-onboarding 2>/dev/null || true
+        fi
     fi
 fi
 
@@ -271,7 +306,7 @@ if [[ -n "$HA_URL" ]]; then
             echo "WARNING: HA API returned $HTTP_CODE (token may be expired). Refreshing token..."
             # Re-run HA setup to get a fresh token
             MOCK_PORT_FILE="$WORKTREE_PATH/.mock-ports.json"
-            $VENV "$SCRIPT_DIR/setup-ha.py" \
+            $VENV "$SETUP_HA" \
                 --ha-url "$HA_URL" \
                 --mock-port-file "$MOCK_PORT_FILE" \
                 --token-file "$WORKTREE_PATH/.ha-token" \
@@ -445,8 +480,8 @@ DIAG_FILE="$WORKTREE_PATH/.diagnostics.txt"
 if [[ -n "$HA_URL" ]]; then
     HA_TOKEN=$(cat "$WORKTREE_PATH/.ha-token" 2>/dev/null || echo "")
     if [[ -n "$HA_TOKEN" ]]; then
-        # Wait a few seconds for entities to settle after restart
-        sleep 5
+        # Wait for integration to load and entities to appear
+        wait_for_entities "$HA_URL" "$HA_TOKEN" 60
         if ! smoke_test "$HA_URL" "$HA_TOKEN" "$WORKTREE_PATH"; then
             echo ""
             echo "Smoke test failed — capturing diagnostics before screenshots..."
@@ -664,13 +699,24 @@ FIXEOF
                 fi
                 sleep 2
             done
+
+            # Update Lovelace dashboard to pick up any new cards added since initial setup
+            MOCK_PORT_FILE="$WORKTREE_PATH/.mock-ports.json"
+            if [[ -f "$MOCK_PORT_FILE" ]]; then
+                echo "Updating Lovelace dashboard..."
+                $VENV "$SETUP_HA" \
+                    --ha-url "$HA_URL" \
+                    --mock-port-file "$MOCK_PORT_FILE" \
+                    --token-file "$WORKTREE_PATH/.ha-token" \
+                    --skip-onboarding 2>/dev/null || true
+            fi
         fi
 
-        # Smoke test after fix
+        # Wait for entities + smoke test after fix
         if [[ -n "$HA_URL" ]]; then
             HA_TOKEN=$(cat "$WORKTREE_PATH/.ha-token" 2>/dev/null || echo "")
             if [[ -n "$HA_TOKEN" ]]; then
-                sleep 5
+                wait_for_entities "$HA_URL" "$HA_TOKEN" 60
                 smoke_test "$HA_URL" "$HA_TOKEN" "$WORKTREE_PATH" || true
             fi
         fi

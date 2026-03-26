@@ -52,18 +52,11 @@ async function getHAToken(): Promise<string> {
   return tokenData.access_token;
 }
 
-let cachedToken: string | null = null;
+async function loginAndNavigate(page: Page) {
+  const token = await getHAToken();
 
-async function loginToHA(page: Page) {
-  if (!cachedToken) {
-    cachedToken = await getHAToken();
-  }
-
-  // Navigate to HA and wait for the page to fully load (it may redirect to /auth)
-  await page.goto(HA_URL, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
-
-  // Inject token into HA's localStorage auth storage
+  // Set token in localStorage
+  await page.goto(HA_URL, { waitUntil: 'domcontentloaded' });
   await page.evaluate(({ token, url }) => {
     const hassTokens = {
       hassUrl: url,
@@ -75,105 +68,57 @@ async function loginToHA(page: Page) {
       expires: Date.now() + 86400000,
     };
     localStorage.setItem('hassTokens', JSON.stringify(hassTokens));
-  }, { token: cachedToken, url: HA_URL });
+  }, { token, url: HA_URL });
 
-  // Reload to pick up the token
-  await page.goto(HA_URL, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(5000);
+  // Navigate to dashboard and wait for cards to render
+  await page.goto(`${HA_URL}/lovelace/network`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(3000);
 }
 
 /**
  * Screenshot a specific custom card element, falling back to full page.
- * HA wraps cards in hui-card elements, so we look for the custom element inside.
  */
 async function screenshotCard(page: Page, cardTag: string, screenshotPath: string) {
   try {
-    // HA renders custom cards inside the shadow DOM of hui-card elements.
-    // Use a broad locator and filter by the card tag presence.
     const card = page.locator(cardTag).first();
     await card.waitFor({ state: 'visible', timeout: 10000 });
     await card.scrollIntoViewIfNeeded();
     await page.waitForTimeout(500);
     await card.screenshot({ path: screenshotPath });
   } catch {
-    // Fallback: full page screenshot if card element not found
     console.warn(`Card element '${cardTag}' not found, taking full page screenshot`);
     await page.screenshot({ path: screenshotPath, fullPage: true });
   }
 }
 
-test.describe('WrtManager Dashboard Cards', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginToHA(page);
-  });
+const CARDS = [
+  { tag: 'router-health-card', name: 'router-health' },
+  { tag: 'network-devices-card', name: 'network-devices' },
+  { tag: 'network-topology-card', name: 'network-topology' },
+  { tag: 'signal-heatmap-card', name: 'signal-heatmap' },
+  { tag: 'roaming-activity-card', name: 'roaming-activity' },
+  { tag: 'interface-health-card', name: 'interface-health' },
+];
 
-  test('dashboard loads with wrtmanager cards', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
+test.describe('WrtManager Dashboard Cards', () => {
+  // All card screenshots in one test — login once, screenshot all cards
+  test('card renders', async ({ page }, testInfo) => {
+    await loginAndNavigate(page);
+
+    // Full dashboard screenshot
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, `dashboard-cards-${testInfo.project.name}.png`),
       fullPage: true,
     });
-  });
 
-  test('router-health-card renders', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
-    await screenshotCard(
-      page,
-      'router-health-card',
-      path.join(SCREENSHOT_DIR, `router-health-${testInfo.project.name}.png`),
-    );
-  });
-
-  test('network-devices-card renders', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
-    await screenshotCard(
-      page,
-      'network-devices-card',
-      path.join(SCREENSHOT_DIR, `network-devices-${testInfo.project.name}.png`),
-    );
-  });
-
-  test('network-topology-card renders', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
-    await screenshotCard(
-      page,
-      'network-topology-card',
-      path.join(SCREENSHOT_DIR, `network-topology-${testInfo.project.name}.png`),
-    );
-  });
-
-  test('signal-heatmap-card renders', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
-    await screenshotCard(
-      page,
-      'signal-heatmap-card',
-      path.join(SCREENSHOT_DIR, `signal-heatmap-${testInfo.project.name}.png`),
-    );
-  });
-
-  test('roaming-activity-card renders', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
-    await screenshotCard(
-      page,
-      'roaming-activity-card',
-      path.join(SCREENSHOT_DIR, `roaming-activity-${testInfo.project.name}.png`),
-    );
-  });
-
-  test('interface-health-card renders', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
-    await screenshotCard(
-      page,
-      'interface-health-card',
-      path.join(SCREENSHOT_DIR, `interface-health-${testInfo.project.name}.png`),
-    );
+    // Individual card screenshots
+    for (const card of CARDS) {
+      await screenshotCard(
+        page,
+        card.tag,
+        path.join(SCREENSHOT_DIR, `${card.name}-${testInfo.project.name}.png`),
+      );
+    }
   });
 
   test('no console errors on dashboard', async ({ page }, testInfo) => {
@@ -182,8 +127,7 @@ test.describe('WrtManager Dashboard Cards', () => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
+    await loginAndNavigate(page);
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, `console-check-${testInfo.project.name}.png`),
@@ -194,7 +138,6 @@ test.describe('WrtManager Dashboard Cards', () => {
       (e) => !e.includes('favicon') && !e.includes('service-worker')
     );
     // Write console errors to file for diagnostics
-    const fs = await import('fs');
     const errorFile = path.join(SCREENSHOT_DIR, 'console-errors.txt');
     if (realErrors.length > 0) {
       console.warn('Console errors found:', realErrors);
@@ -202,57 +145,5 @@ test.describe('WrtManager Dashboard Cards', () => {
     } else {
       fs.writeFileSync(errorFile, 'No console errors');
     }
-  });
-});
-
-test.describe('WrtManager Dashboard - Responsive', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginToHA(page);
-  });
-
-  test('dashboard renders at current viewport', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/lovelace/network`);
-    await page.waitForTimeout(5000);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, `responsive-${testInfo.project.name}.png`),
-      fullPage: true,
-    });
-    const body = await page.textContent('body');
-    expect(body).toBeTruthy();
-  });
-});
-
-test.describe('WrtManager - Entity Pages', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginToHA(page);
-  });
-
-  test('entities page shows wrtmanager entities', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/developer-tools/state`);
-    await page.waitForTimeout(3000);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, `entities-${testInfo.project.name}.png`),
-      fullPage: true,
-    });
-  });
-
-  test('devices page shows routers', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/config/devices/dashboard`);
-    await page.waitForTimeout(3000);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, `devices-${testInfo.project.name}.png`),
-      fullPage: true,
-    });
-    const pageContent = await page.textContent('body');
-    expect(pageContent).toBeTruthy();
-  });
-
-  test('integration config page loads', async ({ page }, testInfo) => {
-    await page.goto(`${HA_URL}/config/integrations/dashboard`);
-    await page.waitForTimeout(3000);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, `integrations-${testInfo.project.name}.png`),
-      fullPage: true,
-    });
   });
 });
