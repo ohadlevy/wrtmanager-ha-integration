@@ -719,7 +719,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                             len(radio_interfaces),
                         )
                         interface_items = [
-                            (f"interface_{i}", iface_data)
+                            (iface_data.get("ifname", f"interface_{i}"), iface_data)
                             for i, iface_data in enumerate(radio_interfaces)
                         ]
                     elif isinstance(radio_interfaces, dict):
@@ -827,6 +827,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                             "is_consolidated": True,
                             "radio_count": len(radios),
                             "frequency_bands": self._get_frequency_bands(radios),
+                            "hidden": any(s.get("hidden", False) for s in ssid_instances),
                         }
                     )
 

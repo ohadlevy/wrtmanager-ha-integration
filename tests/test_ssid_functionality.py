@@ -437,3 +437,53 @@ def test_ssid_attributes_extraction():
     # Test empty data
     assert extract_ssid_attributes({}) == {}
     assert extract_ssid_attributes(None) == {}
+
+
+def test_connected_devices_count():
+    """Test counting connected devices per SSID via (router_host, ssid_interface) matching."""
+
+    def count_connected_devices(coordinator_devices, ssid_interface_set):
+        """Count devices whose (router, interface) pair is in the given set."""
+        return sum(
+            1
+            for d in coordinator_devices
+            if (d.get("router", ""), d.get("interface", "")) in ssid_interface_set
+        )
+
+    devices = [
+        {"mac": "AA:BB:CC:DD:EE:01", "router": "192.168.1.1", "interface": "phy0-ap0"},
+        {"mac": "AA:BB:CC:DD:EE:02", "router": "192.168.1.1", "interface": "phy0-ap0"},
+        {"mac": "AA:BB:CC:DD:EE:03", "router": "192.168.1.1", "interface": "phy1-ap0"},
+        {"mac": "AA:BB:CC:DD:EE:04", "router": "192.168.1.1", "interface": "eth0"},
+        {"mac": "AA:BB:CC:DD:EE:05", "router": "192.168.1.2", "interface": "phy0-ap0"},
+    ]
+
+    # Simple SSID: one (router, interface) pair
+    ssid_ifaces = {("192.168.1.1", "phy0-ap0")}
+    assert count_connected_devices(devices, ssid_ifaces) == 2
+
+    # Different interface on same router — only 1 device
+    ssid_ifaces = {("192.168.1.1", "phy1-ap0")}
+    assert count_connected_devices(devices, ssid_ifaces) == 1
+
+    # Wired interface not counted
+    ssid_ifaces = {("192.168.1.1", "eth0")}
+    assert count_connected_devices(devices, ssid_ifaces) == 1  # 1 wired device explicitly
+
+    # Consolidated SSID across both radios on same router
+    ssid_ifaces = {("192.168.1.1", "phy0-ap0"), ("192.168.1.1", "phy1-ap0")}
+    assert count_connected_devices(devices, ssid_ifaces) == 3
+
+    # Different router — only counts that router's devices
+    ssid_ifaces = {("192.168.1.2", "phy0-ap0")}
+    assert count_connected_devices(devices, ssid_ifaces) == 1
+
+    # Multi-router SSID (same SSID on two routers)
+    ssid_ifaces = {("192.168.1.1", "phy0-ap0"), ("192.168.1.2", "phy0-ap0")}
+    assert count_connected_devices(devices, ssid_ifaces) == 3
+
+    # Empty device list
+    assert count_connected_devices([], {("192.168.1.1", "phy0-ap0")}) == 0
+
+    # Empty interface set
+    assert count_connected_devices(devices, set()) == 0

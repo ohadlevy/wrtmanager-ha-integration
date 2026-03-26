@@ -55,8 +55,9 @@ async function getHAToken(): Promise<string> {
 async function loginAndNavigate(page: Page) {
   const token = await getHAToken();
 
-  // Set token in localStorage
-  await page.goto(HA_URL, { waitUntil: 'domcontentloaded' });
+  // Set token in localStorage — wait for load to avoid navigation context destruction
+  await page.goto(HA_URL, { waitUntil: 'load' });
+  await page.waitForTimeout(1000);
   await page.evaluate(({ token, url }) => {
     const hassTokens = {
       hassUrl: url,
@@ -98,18 +99,13 @@ const CARDS = [
   { tag: 'signal-heatmap-card', name: 'signal-heatmap' },
   { tag: 'roaming-activity-card', name: 'roaming-activity' },
   { tag: 'interface-health-card', name: 'interface-health' },
+  { tag: 'wifi-networks-card', name: 'wifi-networks' },
 ];
 
 test.describe('WrtManager Dashboard Cards', () => {
   // All card screenshots in one test — login once, screenshot all cards
   test('card renders', async ({ page }, testInfo) => {
     await loginAndNavigate(page);
-
-    // Full dashboard screenshot
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, `dashboard-cards-${testInfo.project.name}.png`),
-      fullPage: true,
-    });
 
     // Individual card screenshots
     for (const card of CARDS) {

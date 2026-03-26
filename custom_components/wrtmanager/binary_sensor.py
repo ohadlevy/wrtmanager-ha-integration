@@ -23,6 +23,7 @@ from .const import (
     ATTR_CONNECTION_TYPE,
     ATTR_DEVICE_TYPE,
     ATTR_HOSTNAME,
+    ATTR_INTERFACE,
     ATTR_IP,
     ATTR_MAC,
     ATTR_NETWORK_NAME,
@@ -393,6 +394,25 @@ class WrtGlobalSSIDBinarySensor(CoordinatorEntity, BinarySensorEntity):
                     elif "1" in radio:
                         frequency_bands.add("5GHz")
 
+        # Count connected devices across all (router, interface) pairs for this SSID
+        ssid_interface_set = set()
+        for instance in current_ssid_group["ssid_instances"]:
+            ssid_data = self._get_current_ssid_data(instance["router_host"], instance["ssid_info"])
+            if ssid_data:
+                if ssid_data.get("is_consolidated"):
+                    for iface in ssid_data.get("ssid_interfaces", []):
+                        ssid_interface_set.add((instance["router_host"], iface))
+                else:
+                    iface = ssid_data.get("ssid_interface")
+                    if iface:
+                        ssid_interface_set.add((instance["router_host"], iface))
+
+        connected_devices = sum(
+            1
+            for d in self.coordinator.data.get("devices", [])
+            if (d.get(ATTR_ROUTER, ""), d.get(ATTR_INTERFACE, "")) in ssid_interface_set
+        )
+
         attributes = {
             "ssid_name": self._ssid_name,
             "router_count": len(all_routers),
@@ -406,6 +426,7 @@ class WrtGlobalSSIDBinarySensor(CoordinatorEntity, BinarySensorEntity):
                 if current_ssid_group["areas"]
                 else ["No areas assigned"]
             ),
+            "connected_devices": connected_devices,
         }
 
         # Get common configuration from first available instance

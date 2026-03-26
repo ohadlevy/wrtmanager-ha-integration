@@ -750,6 +750,45 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
     `;
   }
 
+  _findSsidsForRouter(routerName) {
+    if (!this.hass || !routerName) return [];
+    // Collect all global SSID entities and build set of all known routers
+    const globalSsids = [];
+    const allKnownRouters = new Set();
+    for (const [, state] of Object.entries(this.hass.states)) {
+      const attrs = state.attributes || {};
+      if (!attrs.ssid_name || attrs.coverage !== "Global (all routers)") continue;
+      globalSsids.push(attrs);
+      for (const r of (attrs.enabled_routers || [])) allKnownRouters.add(r);
+      for (const r of (attrs.disabled_routers || [])) allKnownRouters.add(r);
+    }
+    if (!allKnownRouters.has(routerName)) return [];
+    return globalSsids.map(attrs => {
+      const bands = attrs.frequency_bands || [];
+      const bandLabel = bands.includes("2.4GHz") && bands.includes("5GHz") ? "2.4+5" :
+        bands.includes("2.4GHz") ? "2.4" : bands.includes("5GHz") ? "5GHz" : "";
+      const isEnabled = (attrs.enabled_routers || []).includes(routerName);
+      return {
+        name: attrs.ssid_name,
+        bandLabel,
+        disabled: !isEnabled,
+        devices: isEnabled ? (attrs.connected_devices ?? null) : null,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  _renderSsidPills(ssids) {
+    if (!ssids || ssids.length === 0) return "";
+    return html`
+      <div class="rhc-ssids">
+        ${ssids.map(s => html`
+          <span class="rhc-ssid-pill ${s.disabled ? "rhc-ssid-off" : ""}" title="${s.disabled ? "Not available on this router" : ""}">
+            ${s.disabled ? `${s.name} off` : `${s.name}${s.bandLabel ? ` ${s.bandLabel}` : ""}${s.devices != null ? ` · ${s.devices}` : ""}`}
+          </span>`)}
+      </div>
+    `;
+  }
+
   _renderLoadRow(r) {
     const color = this._loadColor(r.load1m);
     const pct = r.load1m != null ? Math.min((r.load1m / 2.0) * 100, 100) : 0;
@@ -822,6 +861,7 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
               <span class="rhc-traffic-label">since boot</span>
             </div>
           </div>` : ""}
+        ${this._renderSsidPills(this._findSsidsForRouter(r.name))}
         ${r.swVersion ? html`<div class="rhc-version">${r.swVersion}</div>` : ""}
       </div>
     `;
@@ -870,6 +910,9 @@ class RouterHealthCard extends WrtManagerMixin(LitElement) {
       .rhc-version { font-size: 0.7em; color: var(--disabled-text-color, #666); text-align: right; }
       .rhc-clickable { cursor: pointer; border-radius: 6px; padding: 2px; margin: -2px; }
       .rhc-clickable:hover { background: rgba(var(--rgb-primary-color,255,255,255),0.05); }
+      .rhc-ssids { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+      .rhc-ssid-pill { font-size: 0.75em; padding: 2px 7px; border-radius: 10px; background: rgba(var(--rgb-primary-color,33,150,243),0.08); border: 1px solid rgba(var(--rgb-primary-color,33,150,243),0.2); white-space: nowrap; }
+      .rhc-ssid-off { opacity: 0.45; text-decoration: line-through; }
     `;
   }
 
@@ -1737,6 +1780,178 @@ class InterfaceHealthCardEditor extends LitElement {
 customElements.define("interface-health-card", InterfaceHealthCard);
 customElements.define("interface-health-card-editor", InterfaceHealthCardEditor);
 
+// =====================================================================
+// CARD 7: WiFi Networks
+// =====================================================================
+
+class WifiNetworksCard extends WrtManagerMixin(LitElement) {
+  static get properties() {
+    return { hass: { type: Object }, config: { type: Object } };
+  }
+
+  setConfig(config) { this.config = config; }
+
+  static getConfigElement() {
+    return document.createElement("wifi-networks-card-editor");
+  }
+
+  static getStubConfig() { return {}; }
+
+  _findSsids() {
+    if (!this.hass) return [];
+    const ssids = [];
+    for (const [, state] of Object.entries(this.hass.states)) {
+      const attrs = state.attributes || {};
+      if (!attrs.ssid_name || attrs.coverage !== "Global (all routers)") continue;
+      ssids.push(attrs);
+    }
+    return ssids.sort((a, b) => a.ssid_name.localeCompare(b.ssid_name));
+  }
+
+  _getAllRouterNames(ssids) {
+    const all = new Set();
+    for (const s of ssids) {
+      for (const r of (s.enabled_routers || [])) all.add(r);
+      for (const r of (s.disabled_routers || [])) all.add(r);
+    }
+    return all;
+  }
+
+  _encLabel(enc) {
+    if (!enc || enc === "none" || enc === "") return "Open";
+    if (enc === "sae" || enc === "sae-mixed") return "WPA3";
+    if (enc === "psk2") return "WPA2";
+    if (enc === "psk") return "WPA";
+    return enc;
+  }
+
+  _statusDot(ssid, totalRouters) {
+    const enabled = (ssid.enabled_routers || []).length;
+    const disabled = (ssid.disabled_routers || []).length;
+    const total = totalRouters || (enabled + disabled);
+    if (enabled === 0) return { icon: "○", color: "#f44336", title: "Disabled on all routers" };
+    if (enabled === total && disabled === 0) return { icon: "●", color: "#4caf50", title: "Enabled on all routers" };
+    return { icon: "◑", color: "#ff9800", title: `Enabled: ${enabled} of ${total} routers` };
+  }
+
+  _renderSsid(ssid, allRouterNames) {
+    const dot = this._statusDot(ssid, allRouterNames ? allRouterNames.size : undefined);
+    const enc = this._encLabel(ssid.encryption);
+    const isOpen = enc === "Open";
+    const bands = ssid.frequency_bands || [];
+    const has24 = bands.includes("2.4GHz");
+    const has5 = bands.includes("5GHz");
+    const deviceCount = ssid.connected_devices ?? "-";
+    const enabledSet = new Set(ssid.enabled_routers || []);
+    const disabledSet = new Set(ssid.disabled_routers || []);
+    // All known routers: show ✓ for enabled, ✗ for disabled or unconfigured
+    const routersToShow = allRouterNames && allRouterNames.size > 0 ? allRouterNames : new Set([...enabledSet, ...disabledSet]);
+
+    return html`
+      <div class="wnc-row">
+        <div class="wnc-cell wnc-status" title="${dot.title}" style="color: ${dot.color};">${dot.icon}</div>
+        <div class="wnc-cell wnc-name">
+          <span class="wnc-ssid-name">${ssid.ssid_name}</span>
+          ${routersToShow.size > 0 ? html`
+            <div class="wnc-router-chips">
+              ${[...routersToShow].sort().map(r => enabledSet.has(r)
+                ? html`<span class="wnc-chip wnc-chip-on" title="Enabled on ${r}">✓ ${r}</span>`
+                : html`<span class="wnc-chip wnc-chip-off" title="${disabledSet.has(r) ? "Disabled" : "Not configured"} on ${r}">✗ ${r}</span>`
+              )}
+            </div>` : ""}
+        </div>
+        <div class="wnc-cell wnc-bands">
+          ${has24 ? html`<span class="wnc-band wnc-band-24">2.4</span>` : ""}
+          ${has5 ? html`<span class="wnc-band wnc-band-5">5GHz</span>` : ""}
+        </div>
+        <div class="wnc-cell wnc-enc" style="${isOpen ? "color: #f44336;" : ""}">${enc}</div>
+        <div class="wnc-cell wnc-hidden">
+          ${ssid.hidden ? html`<ha-icon icon="mdi:eye-off" style="--mdc-icon-size: 14px; color: var(--secondary-text-color);"></ha-icon>` : html`<span style="color: var(--disabled-text-color, #888);">-</span>`}
+        </div>
+        <div class="wnc-cell wnc-devices">${deviceCount}</div>
+      </div>
+    `;
+  }
+
+  render() {
+    const ssids = this._findSsids();
+    const allRouterNames = this._getAllRouterNames(ssids);
+    return html`
+      <ha-card>
+        <div class="wnc">
+          <div class="wnc-header">
+            <ha-icon icon="mdi:wifi-settings" style="--mdc-icon-size: 20px;"></ha-icon>
+            WiFi Networks
+            <span class="wnc-count">(${ssids.length})</span>
+          </div>
+          ${ssids.length === 0 ? html`<div class="wnc-empty">No SSIDs found. Check that WrtManager routers are accessible.</div>` : html`
+            <div class="wnc-table">
+              <div class="wnc-thead">
+                <div class="wnc-cell wnc-status"></div>
+                <div class="wnc-cell wnc-name">SSID</div>
+                <div class="wnc-cell wnc-bands">Bands</div>
+                <div class="wnc-cell wnc-enc">Security</div>
+                <div class="wnc-cell wnc-hidden">Hidden</div>
+                <div class="wnc-cell wnc-devices">Devices</div>
+              </div>
+              <div class="wnc-tbody">
+                ${ssids.map((s, i) => html`<div class="${i % 2 === 1 ? "wnc-alt" : ""}">${this._renderSsid(s, allRouterNames)}</div>`)}
+              </div>
+            </div>
+            <div class="wnc-legend">
+              <span style="color:#4caf50;">●</span> all enabled &nbsp;
+              <span style="color:#ff9800;">◑</span> partial &nbsp;
+              <span style="color:#f44336;">○</span> all disabled
+            </div>
+          `}
+        </div>
+      </ha-card>
+    `;
+  }
+
+  static get styles() {
+    return css`
+      .wnc { padding: 16px; }
+      .wnc-header { font-size: 1.1em; font-weight: 500; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+      .wnc-count { color: var(--secondary-text-color); font-weight: normal; font-size: 0.85em; }
+      .wnc-empty { color: var(--secondary-text-color); font-size: 0.9em; text-align: center; padding: 16px 0; }
+      .wnc-table { max-height: 400px; overflow-y: auto; }
+      .wnc-thead { display: grid; grid-template-columns: 20px 1fr auto auto auto auto; gap: 8px; padding: 4px 6px 6px; border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.12)); font-size: 0.75em; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; }
+      .wnc-row { display: grid; grid-template-columns: 20px 1fr auto auto auto auto; gap: 8px; padding: 6px; align-items: start; }
+      .wnc-alt .wnc-row { background: rgba(var(--rgb-primary-color,33,150,243),0.04); border-radius: 6px; }
+      .wnc-cell { display: flex; align-items: center; }
+      .wnc-status { font-size: 1.1em; justify-content: center; padding-top: 2px; }
+      .wnc-name { flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+      .wnc-ssid-name { font-weight: 500; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+      .wnc-router-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+      .wnc-chip { font-size: 0.7em; color: var(--secondary-text-color); }
+      .wnc-chip-on { color: var(--secondary-text-color); }
+      .wnc-chip-off { color: #f44336; opacity: 0.8; }
+      .wnc-bands { gap: 3px; }
+      .wnc-band { font-size: 0.7em; padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+      .wnc-band-24 { background: rgba(33,150,243,0.15); color: #2196f3; border: 1px solid rgba(33,150,243,0.3); }
+      .wnc-band-5 { background: rgba(156,39,176,0.15); color: #9c27b0; border: 1px solid rgba(156,39,176,0.3); }
+      .wnc-enc { font-size: 0.8em; white-space: nowrap; }
+      .wnc-hidden { justify-content: center; }
+      .wnc-devices { font-size: 0.85em; font-variant-numeric: tabular-nums; justify-content: flex-end; min-width: 40px; }
+      .wnc-legend { font-size: 0.72em; color: var(--secondary-text-color); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--divider-color, rgba(255,255,255,0.08)); }
+    `;
+  }
+
+  getCardSize() { return 4; }
+}
+
+class WifiNetworksCardEditor extends LitElement {
+  static get properties() { return { hass: { type: Object }, _config: { type: Object } }; }
+  setConfig(config) { this._config = config; }
+  render() {
+    return html`<div style="padding:16px;"><p style="color:var(--secondary-text-color);font-size:0.9em;">Shows all SSIDs with enabled/disabled status per router, frequency bands, encryption type, hidden flag, and connected device count.</p></div>`;
+  }
+}
+
+customElements.define("wifi-networks-card", WifiNetworksCard);
+customElements.define("wifi-networks-card-editor", WifiNetworksCardEditor);
+
 // ─── Card registration ───────────────────────────────────────────────
 
 window.customCards = window.customCards || [];
@@ -1747,6 +1962,7 @@ window.customCards.push(
   { type: "signal-heatmap-card", name: "Signal Heatmap", description: "Signal strength list with quality filtering and sorting", preview: true },
   { type: "roaming-activity-card", name: "Roaming Activity", description: "Track device roaming between access points with live event log", preview: true },
   { type: "interface-health-card", name: "Interface Health", description: "Network interface status per router with IP, media type, and health indicators", preview: true },
+  { type: "wifi-networks-card", name: "WiFi Networks", description: "SSID overview with per-router status and device counts", preview: true },
 );
 
 console.info("%c WrtManager Cards ", "background: #03a9f4; color: white; font-weight: bold;");
