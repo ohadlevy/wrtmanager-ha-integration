@@ -864,10 +864,123 @@ async def step_create_pr(config: RunConfig, ctx: RunContext) -> RunState:
     if proc.returncode == 0:
         ctx.pr_url = pr_output
         logger.info("PR created: %s", ctx.pr_url)
+
+        # Upload screenshots to PR
+        pr_number = pr_output.rstrip("/").split("/")[-1]
+        await _upload_screenshots_to_pr(config, ctx, pr_number)
     else:
         logger.error("PR creation failed: %s", pr_output)
 
     return RunState.PASSED
+
+
+async def _upload_screenshots_to_pr(config: RunConfig, ctx: RunContext, pr_number: str):
+    """Upload screenshots to orphan branch and add PR comment with inline images."""
+    screenshot_dir = ctx.worktree_path.resolve() / ".test-screenshots"
+    pngs = sorted(screenshot_dir.glob("*-desktop.png"))
+    if not pngs:
+        return
+
+    # Get repo slug
+    proc = await asyncio.create_subprocess_exec(
+        "gh",
+        "repo",
+        "view",
+        "--json",
+        "nameWithOwner",
+        "-q",
+        ".nameWithOwner",
+        cwd=ctx.worktree_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+    repo_slug = stdout.decode().strip()
+    if not repo_slug:
+        logger.warning("Cannot determine repo slug, skipping screenshot upload")
+        return
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        # Clone screenshots branch
+        remote_url = _git_output(ctx.worktree_path, "remote", "get-url", "origin").strip()
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "clone",
+            "--single-branch",
+            "--branch",
+            "screenshots",
+            remote_url,
+            str(tmpdir / "repo"),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        await proc.communicate()
+
+        repo_dir = tmpdir / "repo"
+        if not (repo_dir / ".git").exists():
+            logger.warning("Screenshots branch not found, skipping upload")
+            return
+
+        # Copy screenshots
+        pr_dir = repo_dir / f"pr-{pr_number}"
+        pr_dir.mkdir(exist_ok=True)
+        import shutil
+
+        for png in pngs:
+            shutil.copy2(png, pr_dir / png.name)
+
+        # Commit and push
+        _git_run(repo_dir, "add", f"pr-{pr_number}/")
+        try:
+            _git_run(
+                repo_dir,
+                "commit",
+                "--no-verify",
+                "-m",
+                f"Add screenshots for PR #{pr_number}",
+            )
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                str(repo_dir),
+                "push",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            await proc.communicate()
+        except subprocess.CalledProcessError:
+            logger.warning("Failed to push screenshots")
+            return
+
+        # Build PR comment with inline images
+        images_md = ""
+        for png in pngs:
+            name = png.stem.replace("-desktop", "").replace("-", " ")
+            base = f"https://raw.githubusercontent.com/{repo_slug}"
+            url = f"{base}/screenshots/pr-{pr_number}/{png.name}"
+            images_md += f"### {name}\n![{name}]({url})\n\n"
+
+        comment = f"## Screenshots\n\n{images_md}"
+
+        proc = await asyncio.create_subprocess_exec(
+            "gh",
+            "pr",
+            "comment",
+            pr_number,
+            "--body",
+            comment,
+            cwd=ctx.worktree_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        await proc.communicate()
+        if proc.returncode == 0:
+            logger.info("Screenshots uploaded to PR #%s", pr_number)
+        else:
+            logger.warning("Failed to add screenshot comment")
 
 
 # --- Helpers ---
