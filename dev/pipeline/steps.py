@@ -118,7 +118,8 @@ async def step_planning(config: RunConfig, ctx: RunContext) -> RunState:
     plan_file = ctx.worktree_path / ".plan.md"
     if plan_file.exists():
         ctx.plan_text = plan_file.read_text()
-        return RunState.PLAN_PENDING
+        logger.info("Plan saved, continuing to environment setup")
+        return RunState.STARTING_ENV
     else:
         logger.warning("No .plan.md found after planning session")
         return RunState.PLAN_PENDING

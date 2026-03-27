@@ -36,7 +36,7 @@ class RunState(str, Enum):
 TRANSITIONS = {
     RunState.CREATED: [RunState.SETTING_UP, RunState.STARTING_ENV, RunState.PLANNING],
     RunState.SETTING_UP: [RunState.PLANNING, RunState.STARTING_ENV, RunState.ERROR],
-    RunState.PLANNING: [RunState.PLAN_PENDING, RunState.ERROR],
+    RunState.PLANNING: [RunState.PLAN_PENDING, RunState.STARTING_ENV, RunState.ERROR],
     RunState.PLAN_PENDING: [
         RunState.STARTING_ENV,
         RunState.EXECUTING,
