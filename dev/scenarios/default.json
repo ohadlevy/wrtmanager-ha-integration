@@ -219,6 +219,12 @@
           }
         }
       },
+      "iwinfo_info": {
+        "phy0-ap0": {"phy": "phy0", "ssid": "HomeNet", "bssid": "AA:BB:CC:DD:EE:01", "mode": "Master", "channel": 6, "frequency": 2437, "txpower": 20, "signal": -30, "noise": -95, "encryption": {"enabled": true, "wpa": [2], "authentication": ["sae"]}},
+        "phy0-ap1": {"phy": "phy0", "ssid": "HomeNet-Guest", "bssid": "AA:BB:CC:DD:EE:02", "mode": "Master", "channel": 6, "frequency": 2437, "txpower": 20, "signal": -30, "noise": -95, "encryption": {"enabled": true, "wpa": [2], "authentication": ["sae"]}},
+        "phy1-ap0": {"phy": "phy1", "ssid": "HomeNet", "bssid": "AA:BB:CC:DD:EE:03", "mode": "Master", "channel": 36, "frequency": 5180, "txpower": 23, "signal": -30, "noise": -95, "encryption": {"enabled": true, "wpa": [2], "authentication": ["sae"]}},
+        "phy1-ap1": {"phy": "phy1", "ssid": "HomeNet-Guest", "bssid": "AA:BB:CC:DD:EE:04", "mode": "Master", "channel": 36, "frequency": 5180, "txpower": 23, "signal": -30, "noise": -95, "encryption": {"enabled": true, "wpa": [2], "authentication": ["sae"]}}
+      },
       "associations": {
         "phy0-ap0": [
           {"mac": "70:C9:32:09:98:76", "signal": -52, "rx": {"rate": 72200}, "tx": {"rate": 72200}},
@@ -301,9 +307,10 @@
               "ifname": "phy0-ap0",
               "config": {
                 "mode": "ap",
-                "ssid": "HomeNet",
+                "ssid": "unknown",
                 "encryption": "sae-mixed",
                 "key": "supersecret123",
+                "ieee80211r": "1",
                 "network": ["lan"],
                 "disabled": false
               }
@@ -326,15 +333,20 @@
               "ifname": "phy1-ap0",
               "config": {
                 "mode": "ap",
-                "ssid": "HomeNet",
+                "ssid": "unknown",
                 "encryption": "sae-mixed",
                 "key": "supersecret123",
+                "ieee80211r": "1",
                 "network": ["lan"],
                 "disabled": false
               }
             }
           ]
         }
+      },
+      "iwinfo_info": {
+        "phy0-ap0": {"phy": "phy0", "ssid": "HomeNet", "bssid": "BB:BB:CC:DD:EE:01", "mode": "Master", "channel": 1, "frequency": 2412, "txpower": 20, "signal": -30, "noise": -95, "encryption": {"enabled": true, "wpa": [2], "authentication": ["sae"]}},
+        "phy1-ap0": {"phy": "phy1", "ssid": "HomeNet", "bssid": "BB:BB:CC:DD:EE:02", "mode": "Master", "channel": 149, "frequency": 5745, "txpower": 23, "signal": -30, "noise": -95, "encryption": {"enabled": true, "wpa": [2], "authentication": ["sae"]}}
       },
       "network_device_status": {
         "br-lan": {
@@ -489,6 +501,10 @@
           {"interface": "wan", "l3_device": "eth1", "ipv4-address": []},
           {"interface": "lan", "l3_device": "br-lan", "ipv4-address": [{"address": "192.168.1.3", "mask": 24}]}
         ]
+      },
+      "iwinfo_info": {
+        "phy0-ap0": {"phy": "phy0", "ssid": "HomeNet", "bssid": "CC:BB:CC:DD:EE:01", "mode": "Master", "channel": 11, "frequency": 2462, "txpower": 20, "signal": -30, "noise": -95, "encryption": {"enabled": true, "wpa": [2], "authentication": ["sae"]}},
+        "phy1-ap0": {"phy": "phy1", "ssid": "HomeNet", "bssid": "CC:BB:CC:DD:EE:02", "mode": "Master", "channel": 44, "frequency": 5220, "txpower": 23, "signal": -30, "noise": -95, "encryption": {"enabled": true, "wpa": [2], "authentication": ["sae"]}}
       },
       "associations": {
         "phy0-ap0": [

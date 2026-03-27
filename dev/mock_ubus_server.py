@@ -144,6 +144,7 @@ class MockRouter:
         handlers = {
             ("iwinfo", "devices"): self._handle_iwinfo_devices,
             ("iwinfo", "assoclist"): self._handle_iwinfo_assoclist,
+            ("iwinfo", "info"): self._handle_iwinfo_info,
             ("system", "info"): self._handle_system_info,
             ("system", "board"): self._handle_system_board,
             ("network.device", "status"): self._handle_network_device_status,
@@ -169,6 +170,11 @@ class MockRouter:
         device = params.get("device", "")
         results = self.associations.get(device, [])
         return {"results": results}
+
+    def _handle_iwinfo_info(self, params: dict) -> dict | None:
+        device = params.get("device", "")
+        iwinfo_info = self.config.get("iwinfo_info", {})
+        return iwinfo_info.get(device)
 
     def _handle_system_info(self, params: dict) -> dict:
         info = copy.deepcopy(self.config.get("system_info", {}))

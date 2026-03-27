@@ -321,6 +321,14 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                                 }
                             )
 
+            # Build iwinfo SSID map for this router (real SSID, not ACL-masked config value)
+            iwinfo_ssid_map: Dict[str, str] = {}
+            if interfaces:
+                for interface in interfaces:
+                    iwinfo_info = await client.get_iwinfo_info(session_id, interface)
+                    if iwinfo_info and iwinfo_info.get("ssid"):
+                        iwinfo_ssid_map[interface] = iwinfo_info["ssid"]
+
             # Get system information for monitoring
             system_info = await client.get_system_info(session_id)
             system_board = await client.get_system_board(session_id)
@@ -361,6 +369,8 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                 interface_data.update(network_interfaces)
             if wireless_status:
                 interface_data.update(wireless_status)
+            if iwinfo_ssid_map:
+                interface_data["_iwinfo_ssids"] = iwinfo_ssid_map
 
             # Smart DHCP polling - only query DHCP from known DHCP servers or untested routers
             should_try_dhcp = host in self._dhcp_routers or host not in self._tried_dhcp
@@ -792,6 +802,7 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
 
         for router_host, router_interfaces in interfaces.items():
             router_ssids = []
+            iwinfo_ssids = router_interfaces.pop("_iwinfo_ssids", {})
 
             _LOGGER.debug(
                 "Processing router %s with interfaces: %s",
@@ -868,6 +879,11 @@ class WrtManagerCoordinator(DataUpdateCoordinator):
                     for ssid_interface_name, ssid_interface_data in interface_items:
                         config = ssid_interface_data.get("config", {})
                         ssid_name = config.get("ssid")
+                        # Prefer iwinfo SSID over config SSID (config may be ACL-masked)
+                        iface_name = ssid_interface_data.get("ifname", ssid_interface_name)
+                        iwinfo_ssid = iwinfo_ssids.get(iface_name)
+                        if iwinfo_ssid:
+                            ssid_name = iwinfo_ssid
 
                         _LOGGER.debug(
                             "Processing SSID interface %s: ssid_name=%s, config_keys=%s",

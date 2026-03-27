@@ -237,6 +237,11 @@ class UbusClient:
         result = await self.call_ubus(session_id, "iwinfo", "assoclist", {"device": interface})
         return result.get("results", []) if result else None
 
+    async def get_iwinfo_info(self, session_id: str, device: str) -> Optional[Dict[str, Any]]:
+        """Get iwinfo details for a wireless interface (includes real SSID)."""
+        result = await self.call_ubus(session_id, "iwinfo", "info", {"device": device})
+        return result if result else None
+
     async def get_dhcp_leases(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get DHCP lease information using best available method."""
         # First try luci-rpc method (more reliable when available)

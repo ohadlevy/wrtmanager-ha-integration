@@ -11,10 +11,13 @@ import os
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
-    not os.environ.get("HA_TOKEN"),
-    reason="E2E tests require HA_TOKEN environment variable",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not os.environ.get("HA_TOKEN"),
+        reason="E2E tests require HA_TOKEN environment variable",
+    ),
+    pytest.mark.allow_hosts(["localhost", "127.0.0.1"]),
+]
 
 
 class TestIntegrationSetup:

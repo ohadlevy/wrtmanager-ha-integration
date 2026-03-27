@@ -140,6 +140,7 @@ class TestDHCPPollingOptimization:
         for host, client in coordinator.routers.items():
             client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
             client.get_device_associations = AsyncMock(return_value=[])
+            client.get_iwinfo_info = AsyncMock(return_value=None)
             client.get_system_info = AsyncMock(return_value={})
             client.get_system_board = AsyncMock(return_value={})
             client.get_network_interfaces = AsyncMock(return_value={})
@@ -177,6 +178,7 @@ class TestDHCPPollingOptimization:
         client = coordinator.routers["192.168.1.2"]
         client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
         client.get_device_associations = AsyncMock(return_value=[])
+        client.get_iwinfo_info = AsyncMock(return_value=None)
         client.get_system_info = AsyncMock(return_value={})
         client.get_system_board = AsyncMock(return_value={})
         client.get_network_interfaces = AsyncMock(return_value={})
@@ -203,6 +205,7 @@ class TestDHCPPollingOptimization:
         client = coordinator.routers["192.168.1.1"]
         client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
         client.get_device_associations = AsyncMock(return_value=[])
+        client.get_iwinfo_info = AsyncMock(return_value=None)
         client.get_system_info = AsyncMock(return_value={})
         client.get_system_board = AsyncMock(return_value={})
         client.get_network_interfaces = AsyncMock(return_value={})
@@ -296,6 +299,7 @@ class TestDHCPPollingOptimization:
         for host, client in coordinator.routers.items():
             client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
             client.get_device_associations = AsyncMock(return_value=[])
+            client.get_iwinfo_info = AsyncMock(return_value=None)
             client.get_system_info = AsyncMock(return_value={})
             client.get_system_board = AsyncMock(return_value={})
             client.get_network_interfaces = AsyncMock(return_value={})
@@ -332,6 +336,7 @@ class TestDHCPPollingOptimization:
         client = coordinator.routers["192.168.1.1"]
         client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
         client.get_device_associations = AsyncMock(return_value=[])
+        client.get_iwinfo_info = AsyncMock(return_value=None)
         client.get_system_info = AsyncMock(return_value={})
         client.get_system_board = AsyncMock(return_value={})
         client.get_network_interfaces = AsyncMock(return_value={})
@@ -368,6 +373,7 @@ class TestDHCPPollingOptimization:
         client = coordinator.routers["192.168.1.1"]
         client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
         client.get_device_associations = AsyncMock(return_value=[])
+        client.get_iwinfo_info = AsyncMock(return_value=None)
         client.get_system_info = AsyncMock(return_value={})
         client.get_system_board = AsyncMock(return_value={})
         client.get_network_interfaces = AsyncMock(return_value={})
@@ -405,6 +411,7 @@ class TestDHCPPollingOptimization:
         for host, client in coordinator.routers.items():
             client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
             client.get_device_associations = AsyncMock(return_value=[])
+            client.get_iwinfo_info = AsyncMock(return_value=None)
             client.get_system_info = AsyncMock(return_value={})
             client.get_system_board = AsyncMock(return_value={})
             client.get_network_interfaces = AsyncMock(return_value={})
@@ -485,6 +492,7 @@ class TestDHCPPollingOptimization:
         dhcp_client = coordinator.routers["192.168.1.1"]
         dhcp_client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
         dhcp_client.get_device_associations = AsyncMock(return_value=[])
+        dhcp_client.get_iwinfo_info = AsyncMock(return_value=None)
         dhcp_client.get_system_info = AsyncMock(return_value={})
         dhcp_client.get_system_board = AsyncMock(return_value={})
         dhcp_client.get_network_interfaces = AsyncMock(return_value={})
@@ -502,6 +510,7 @@ class TestDHCPPollingOptimization:
         ap_client = coordinator.routers["192.168.1.2"]
         ap_client.get_wireless_devices = AsyncMock(return_value=["wlan0"])
         ap_client.get_device_associations = AsyncMock(return_value=[])
+        ap_client.get_iwinfo_info = AsyncMock(return_value=None)
         ap_client.get_system_info = AsyncMock(return_value={})
         ap_client.get_system_board = AsyncMock(return_value={})
         ap_client.get_network_interfaces = AsyncMock(return_value={})
