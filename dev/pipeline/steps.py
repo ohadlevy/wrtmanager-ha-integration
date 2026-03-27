@@ -230,12 +230,15 @@ Your working directory is: {ctx.worktree_path}
 ## Instructions
 1. Implement each file change listed in the plan
 2. Write the tests listed in the plan
-3. Run tests ONCE: PYTHONPATH=. .venv/bin/python -m pytest tests/ -v
+3. Run tests: PYTHONPATH=. .venv/bin/python -m pytest tests/ -v
 4. If tests fail, fix and re-run (max 2 retries)
-5. Commit: git add <files> && git commit -m "<message>"
+5. Make ONE commit at the end with ALL changes: git add <files> && git commit -m "<message>"
 
 Rules:
 - Follow the plan — do NOT add features or changes not in the plan
+- Only modify files listed in the plan
+- Do NOT touch CLAUDE.md, .pre-commit-config.yaml, or dev/ infrastructure
+- Make exactly ONE commit with all changes — do NOT make multiple commits
 - Do NOT use gh, curl, or explore dev/ scripts
 - Do NOT push or create a PR
 - Do NOT mention AI in commit messages
@@ -479,8 +482,23 @@ async def _update_dashboard(config: RunConfig, ctx: RunContext):
 # --- Wait for Entities ---
 
 
+def _has_ui_changes(worktree: Path) -> bool:
+    """Check if the diff includes UI-related files."""
+    try:
+        diff_files = _git_output(worktree, "diff", "main", "--name-only").splitlines()
+        ui_patterns = ["wrtmanager-cards.js", "binary_sensor.py", "sensor.py", "coordinator.py"]
+        return any(any(p in f for p in ui_patterns) for f in diff_files)
+    except Exception:
+        return True  # assume yes if we can't check
+
+
 async def step_wait_entities(config: RunConfig, ctx: RunContext) -> RunState:
     """Wait for wrtmanager entities to appear in HA."""
+    # Skip screenshots entirely if no UI changes
+    if not _has_ui_changes(ctx.worktree_path):
+        logger.info("No UI changes detected, skipping screenshots/review")
+        return RunState.CREATING_PR
+
     if not ctx.ha_url or not ctx.ha_token:
         return RunState.TAKING_SCREENSHOTS
 

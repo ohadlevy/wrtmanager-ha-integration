@@ -191,6 +191,38 @@ class TestWaitEntities:
         assert result == RunState.TAKING_SCREENSHOTS
 
 
+class TestSkipScreenshots:
+    """Skip screenshots when no UI changes."""
+
+    def test_has_ui_changes_with_cards_js(self, tmp_path):
+        from dev.pipeline.steps import _has_ui_changes
+
+        with patch("dev.pipeline.steps._git_output") as mock:
+            mock.return_value = "custom_components/wrtmanager/www/wrtmanager-cards.js\n"
+            assert _has_ui_changes(tmp_path) is True
+
+    def test_has_ui_changes_with_sensor(self, tmp_path):
+        from dev.pipeline.steps import _has_ui_changes
+
+        with patch("dev.pipeline.steps._git_output") as mock:
+            mock.return_value = "custom_components/wrtmanager/sensor.py\n"
+            assert _has_ui_changes(tmp_path) is True
+
+    def test_no_ui_changes_script_only(self, tmp_path):
+        from dev.pipeline.steps import _has_ui_changes
+
+        with patch("dev.pipeline.steps._git_output") as mock:
+            mock.return_value = "scripts/setup_openwrt_ha_integration.sh\ntests/test_acl.py\n"
+            assert _has_ui_changes(tmp_path) is False
+
+    def test_no_ui_changes_docs_only(self, tmp_path):
+        from dev.pipeline.steps import _has_ui_changes
+
+        with patch("dev.pipeline.steps._git_output") as mock:
+            mock.return_value = "docs/readme.md\nexamples/dashboard.yaml\n"
+            assert _has_ui_changes(tmp_path) is False
+
+
 class TestCodeOnlyTools:
     """Verify fix/execute steps use restricted tools (bug: run 15 hung)."""
 
