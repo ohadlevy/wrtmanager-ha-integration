@@ -80,8 +80,9 @@ async def cmd_run(args):
     print(f"{'='*50}\n")
 
     if result == RunState.PLAN_PENDING:
-        print("Plan saved. To continue:")
-        print(f"  python -m dev.pipeline.cli resume --worktree {ctx.worktree_path}")
+        print("No plan was created. To plan interactively:")
+        print(f"  cd {ctx.worktree_path} && claude")
+        print(f"Then: dev/pipeline.sh resume {config.issue_number} -v")
         return 0
 
     return 0 if result == RunState.PASSED else 1
