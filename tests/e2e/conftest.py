@@ -42,12 +42,12 @@ def ha_api():
 
 
 @pytest.fixture
-def ha_states(ha_api):
+def ha_states(ha_api, socket_enabled):
     """Get all entity states from HA."""
     return ha_api("/api/states")
 
 
 @pytest.fixture
-def ha_config_entries(ha_api):
+def ha_config_entries(ha_api, socket_enabled):
     """Get all config entries."""
     return ha_api("/api/config/config_entries/entry")
