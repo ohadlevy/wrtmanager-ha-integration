@@ -151,6 +151,7 @@ async def cmd_resume(args):
     state_map = {
         "env": RunState.STARTING_ENV,
         "execute": RunState.EXECUTING,
+        "code_review": RunState.CODE_REVIEW,
         "review": RunState.RESTARTING_HA,
         "screenshots": RunState.TAKING_SCREENSHOTS,
         "pr": RunState.CREATING_PR,
@@ -232,8 +233,8 @@ def main():
         "--from",
         dest="start_from",
         default="env",
-        choices=["env", "execute", "review", "screenshots", "pr"],
-        help="Start from: env, execute, review, screenshots, pr",
+        choices=["env", "execute", "code_review", "review", "screenshots", "pr"],
+        help="Start from: env, execute, code_review, review, screenshots, pr",
     )
 
     args = parser.parse_args()

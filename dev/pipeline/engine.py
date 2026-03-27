@@ -40,6 +40,7 @@ TRANSITIONS = {
     RunState.PLAN_PENDING: [
         RunState.STARTING_ENV,
         RunState.EXECUTING,
+        RunState.CODE_REVIEW,
         RunState.RESTARTING_HA,
         RunState.TAKING_SCREENSHOTS,
         RunState.CREATING_PR,
