@@ -158,11 +158,33 @@ async def cmd_resume(args):
     }
     target = state_map.get(start_from, RunState.STARTING_ENV)
 
-    # Read HA connection details if skipping env setup
+    # Ensure environment is running when skipping env setup
     if target != RunState.STARTING_ENV:
         import json
 
+        from .infra import WorktreeManager
+
         state_file = worktree / ".dev-env-state.json"
+        env_running = False
+        if state_file.exists():
+            env_data = json.loads(state_file.read_text())
+            mock_pid = env_data.get("mock_pid", 0)
+            # Check if mock server is actually running
+            if mock_pid:
+                try:
+                    import os
+
+                    os.kill(mock_pid, 0)
+                    env_running = True
+                except (OSError, ProcessLookupError):
+                    pass
+
+        if not env_running:
+            print("Environment not running, starting it...")
+            wt_mgr = WorktreeManager(Path.cwd())
+            await wt_mgr.setup(issue, branch_prefix="feature", start_env=True)
+            state_file = worktree / ".dev-env-state.json"
+
         if state_file.exists():
             env_data = json.loads(state_file.read_text())
             pipeline.ctx.ha_url = env_data.get("ha_url", "")
