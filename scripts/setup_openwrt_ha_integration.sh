@@ -187,7 +187,7 @@ DHCP_ENABLED=$(run_on_router "
 if [[ "$DHCP_ENABLED" == "yes" ]]; then
     echo "DHCP detected - configuring full permissions including luci-rpc"
     LUCI_RPC_PERMISSION=',
-                "luci-rpc": [ "getDHCPLeases" ]'
+                "luci-rpc": [ "getDHCPLeases", "getHostHints" ]'
 else
     echo "No DHCP detected - configuring basic permissions without luci-rpc"
     LUCI_RPC_PERMISSION=''
@@ -208,6 +208,7 @@ run_on_router "
                 \"uci\": [ \"get\" ],
                 \"network.wireless\": [ \"status\" ],
                 \"network.device\": [ \"status\" ],
+                \"network.interface\": [ \"dump\" ],
                 \"dhcp\": [ \"ipv4leases\", \"ipv6leases\" ]$LUCI_RPC_PERMISSION
             }
         },
@@ -352,6 +353,26 @@ elif echo "$RESPONSE" | grep -q '"ubus_rpc_session"'; then
     else
         echo "ℹ️  No DHCP configured on this router (Access Point mode)"
         echo "   Device IP addresses will be detected from other routers"
+    fi
+
+    # Test network.interface.dump (needed for wired client subnet mapping)
+    echo "Testing network.interface.dump API call..."
+    IFACE_RESPONSE=$(call_ubus_api "$SESSION_ID" "network.interface" "dump" "{}" 7)
+    if echo "$IFACE_RESPONSE" | grep -q '"interface"'; then
+        echo "✅ network.interface.dump working!"
+    else
+        echo "⚠️  network.interface.dump failed - wired client network detection may be limited"
+    fi
+
+    # Test luci-rpc.getHostHints (needed for wired client discovery)
+    if [[ "$DHCP_ENABLED" == "yes" ]]; then
+        echo "Testing luci-rpc.getHostHints API call..."
+        HINTS_RESPONSE=$(call_ubus_api "$SESSION_ID" "luci-rpc" "getHostHints" "{}" 8)
+        if echo "$HINTS_RESPONSE" | grep -q '"result"'; then
+            echo "✅ luci-rpc.getHostHints working!"
+        else
+            echo "⚠️  luci-rpc.getHostHints failed - wired client discovery may be limited"
+        fi
     fi
 
 else
