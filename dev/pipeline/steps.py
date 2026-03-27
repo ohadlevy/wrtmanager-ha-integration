@@ -825,14 +825,17 @@ async def step_create_pr(config: RunConfig, ctx: RunContext) -> RunState:
         _git_run(wt, "rebase", "main")
     except subprocess.CalledProcessError:
         logger.warning("Rebase conflict — auto-resolving")
-        conflicted = _git_output(wt, "diff", "--name-only", "--diff-filter=U").splitlines()
-        for f in conflicted:
-            _git_run(wt, "checkout", "--theirs", f)
-            _git_run(wt, "add", f)
         try:
+            conflicted = _git_output(wt, "diff", "--name-only", "--diff-filter=U").splitlines()
+            for f in conflicted:
+                _git_run(wt, "checkout", "--theirs", f)
+                _git_run(wt, "add", f)
             _git_run(wt, "rebase", "--continue")
         except subprocess.CalledProcessError:
-            _git_run(wt, "rebase", "--abort")
+            try:
+                _git_run(wt, "rebase", "--abort")
+            except subprocess.CalledProcessError:
+                pass
             logger.error("Rebase failed, pushing without rebase")
 
     # Push
