@@ -231,9 +231,10 @@ Your working directory is: {ctx.worktree_path}
 ## Instructions
 1. Implement each file change listed in the plan
 2. Write the tests listed in the plan
-3. Run tests: PYTHONPATH=. .venv/bin/python -m pytest tests/ -v
-4. If tests fail, fix and re-run (max 2 retries)
-5. Make ONE commit at the end with ALL changes: git add <files> && git commit -m "<message>"
+3. Run formatters: .venv/bin/python -m black <files> && .venv/bin/python -m isort <files>
+4. Run tests: PYTHONPATH=. .venv/bin/python -m pytest tests/ -v
+5. If tests fail, fix and re-run (max 2 retries)
+6. Make ONE commit at the end with ALL changes: git add <files> && git commit -m "<message>"
 
 Rules:
 - Follow the plan — do NOT add features or changes not in the plan
