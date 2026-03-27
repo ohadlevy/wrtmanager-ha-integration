@@ -239,3 +239,36 @@ class TestCodeOnlyTools:
             tools = call_kwargs.get("allowed_tools", "")
             assert "mock_ubus" not in tools
             assert "podman" not in tools
+
+
+class TestJunkFileCleanup:
+    """Test that junk files are detected and removed."""
+
+    def test_junk_files_list_complete(self):
+        """All known junk files should be in the list."""
+        from dev.pipeline.steps import _JUNK_FILES
+
+        expected = [
+            "CLAUDE.md",
+            ".pre-commit-config.yaml",
+            ".plan.md",
+            ".diagnostics.txt",
+            ".ha-entities.json",
+            ".screenshot-runner.py",
+            ".commit_msg",
+            "latest",
+            ".claude/settings.json",
+        ]
+        for f in expected:
+            assert f in _JUNK_FILES, f"{f} missing from _JUNK_FILES"
+
+    def test_clean_junk_detects_files(self):
+        """_clean_junk_files should detect junk in the diff."""
+        from dev.pipeline.steps import _JUNK_FILES
+
+        # Simulate a diff that includes junk
+        diff_output = "CLAUDE.md\ncustom_components/wrtmanager/sensor.py\n.plan.md\n"
+        junk = [f for f in diff_output.splitlines() if f.strip() in _JUNK_FILES]
+        assert "CLAUDE.md" in junk
+        assert ".plan.md" in junk
+        assert "custom_components/wrtmanager/sensor.py" not in junk

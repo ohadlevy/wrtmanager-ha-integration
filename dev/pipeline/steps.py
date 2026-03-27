@@ -269,11 +269,22 @@ Rules:
 
 
 async def step_code_review(config: RunConfig, ctx: RunContext) -> RunState:
-    """Quick code review of the diff."""
-    diff_stat = _git_diff_stat(ctx.worktree_path)
+    """Code review + remove files that shouldn't be committed."""
+    wt = ctx.worktree_path
+
+    # Remove committed files that shouldn't be in the PR
+    _clean_junk_files(wt)
+
+    diff_stat = _git_diff_stat(wt)
     prompt = f"""Review this diff for obvious issues. Be brief.
 Check for: unused imports, missing test cases, hardcoded values,
 security issues, unnecessary changes outside the plan scope.
+
+IMPORTANT: Check that ONLY files relevant to the issue are modified.
+Flag if any of these are in the diff (they should NOT be):
+- CLAUDE.md, .pre-commit-config.yaml, .claude/settings.json
+- .plan.md, .diagnostics.txt, .ha-entities.json
+- Any file not related to the feature being implemented
 
 ## Diff
 {diff_stat}
@@ -287,12 +298,53 @@ Otherwise say "No critical issues."
         prompt,
         model="sonnet",
         allowed_tools=REVIEW_TOOLS,
-        cwd=ctx.worktree_path,
+        cwd=wt,
         timeout=300,
         log_file=log_file,
     )
     ctx.total_cost += result.cost_usd
     return RunState.RESTARTING_HA
+
+
+# Files that should never be in a PR commit
+_JUNK_FILES = [
+    "CLAUDE.md",
+    ".pre-commit-config.yaml",
+    ".plan.md",
+    ".diagnostics.txt",
+    ".ha-entities.json",
+    ".screenshot-runner.py",
+    ".screenshot-runner.js",
+    ".commit_msg",
+    "latest",
+    ".claude/settings.json",
+    ".claude-debug.log",
+]
+
+
+def _clean_junk_files(worktree: Path):
+    """Remove junk files from git tracking if they were committed."""
+    try:
+        diff_files = _git_output(worktree, "diff", "main", "--name-only").splitlines()
+        junk_in_diff = [f for f in diff_files if f.strip() in _JUNK_FILES]
+        if junk_in_diff:
+            logger.warning("Removing junk files from commits: %s", junk_in_diff)
+            for f in junk_in_diff:
+                # Restore from main (or remove if new)
+                try:
+                    _git_run(worktree, "checkout", "main", "--", f)
+                except subprocess.CalledProcessError:
+                    _git_run(worktree, "rm", "--cached", f)
+            _git_run(
+                worktree,
+                "commit",
+                "--no-verify",
+                "--allow-empty",
+                "-m",
+                "Remove files not related to this feature",
+            )
+    except subprocess.CalledProcessError:
+        pass
 
 
 # --- Restart HA ---

@@ -164,6 +164,15 @@ bandit-report.json
 .claude/runs.db-shm
 .claude-resume-prompt.md
 
+# Pipeline working files (created in worktrees during runs)
+.plan.md
+.diagnostics.txt
+.ha-entities.json
+.screenshot-runner.py
+.screenshot-runner.js
+.commit_msg
+latest
+
 # Node (Playwright)
 node_modules/
 package-lock.json
