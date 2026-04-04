@@ -9,8 +9,8 @@ from pathlib import Path
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN
@@ -72,22 +72,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register custom Lovelace cards (only once across all config entries)
     if not hass.data.get(f"{DOMAIN}_cards_registered"):
+        hass.data[f"{DOMAIN}_cards_registered"] = True
         try:
             await hass.http.async_register_static_paths(
                 [StaticPathConfig(CARDS_URL, str(CARDS_PATH), cache_headers=False)]
             )
-            hass.data[f"{DOMAIN}_cards_registered"] = True
-
-            resources = hass.data["lovelace"].resources
-            if not any(r.get("url", "").startswith(CARDS_URL) for r in resources.async_items()):
-                await resources.async_create_item({"res_type": "module", "url": CARDS_RESOURCE_URL})
-                _LOGGER.info("Registered WrtManager Lovelace cards v%s", CARDS_VERSION)
         except Exception:
             _LOGGER.info(
-                "Could not auto-register Lovelace cards. "
+                "Could not register Lovelace card path. "
                 "Add '%s' as a JS module resource manually.",
                 CARDS_URL,
             )
+
+        async def _register_cards(_event: Event | None = None) -> None:
+            try:
+                resources = hass.data["lovelace"].resources
+                if not any(r.get("url", "").startswith(CARDS_URL) for r in resources.async_items()):
+                    await resources.async_create_item(
+                        {"res_type": "module", "url": CARDS_RESOURCE_URL}
+                    )
+                    _LOGGER.info("Registered WrtManager Lovelace cards v%s", CARDS_VERSION)
+            except Exception:
+                _LOGGER.info(
+                    "Could not auto-register Lovelace cards. "
+                    "Add '%s' as a JS module resource manually.",
+                    CARDS_URL,
+                )
+
+        if hass.is_running:
+            await _register_cards()
+        else:
+            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register_cards)
 
     # Forward the setup to the sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -105,6 +120,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = hass.data[DOMAIN][entry.entry_id]
         await coordinator.async_shutdown()
         hass.data[DOMAIN].pop(entry.entry_id)
+        if not hass.data[DOMAIN]:
+            hass.data.pop(f"{DOMAIN}_cards_registered", None)
 
     return unload_ok
 
