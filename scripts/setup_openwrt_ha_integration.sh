@@ -90,21 +90,29 @@ echo "✅ SSH connection successful"
 echo ""
 echo "Step 1: Checking required packages..."
 
-# Check if packages are already installed
+# Detect package manager (apk for OpenWrt 24+, opkg for older)
+PKG_MANAGER=$(run_on_router "command -v apk >/dev/null 2>&1 && echo 'apk' || echo 'opkg'")
+echo "Detected package manager: $PKG_MANAGER"
+
 PACKAGES_NEEDED=$(run_on_router "
     missing_packages=''
-    if ! opkg list-installed | grep -q '^rpcd-mod-file '; then
-        missing_packages=\$missing_packages' rpcd-mod-file'
-    fi
-    if ! opkg list-installed | grep -q '^uhttpd-mod-ubus '; then
-        missing_packages=\$missing_packages' uhttpd-mod-ubus'
+    if [ '$PKG_MANAGER' = 'apk' ]; then
+        apk info -e rpcd-mod-file >/dev/null 2>&1 || missing_packages=\$missing_packages' rpcd-mod-file'
+        apk info -e uhttpd-mod-ubus >/dev/null 2>&1 || missing_packages=\$missing_packages' uhttpd-mod-ubus'
+    else
+        opkg list-installed | grep -q '^rpcd-mod-file ' || missing_packages=\$missing_packages' rpcd-mod-file'
+        opkg list-installed | grep -q '^uhttpd-mod-ubus ' || missing_packages=\$missing_packages' uhttpd-mod-ubus'
     fi
     echo \$missing_packages
 ")
 
 if [[ -n "$PACKAGES_NEEDED" ]]; then
     echo "Installing missing packages:$PACKAGES_NEEDED"
-    run_on_router "opkg update && opkg install$PACKAGES_NEEDED"
+    if [[ "$PKG_MANAGER" == "apk" ]]; then
+        run_on_router "apk update && apk add$PACKAGES_NEEDED"
+    else
+        run_on_router "opkg update && opkg install$PACKAGES_NEEDED"
+    fi
     echo "✅ Packages installed successfully"
 else
     echo "✅ All required packages are already installed"
@@ -406,7 +414,11 @@ echo ""
 echo "Important notes:"
 echo "  • This configuration persists across router reboots and firmware upgrades"
 echo "  • The ACL file is preserved via /etc/sysupgrade.conf"
-echo "  • After firmware upgrades, you may need to reinstall packages (uhttpd-mod-ubus, rpcd-mod-file)"
+if [[ "$PKG_MANAGER" == "apk" ]]; then
+    echo "  • After firmware upgrades, you may need to reinstall packages: apk add uhttpd-mod-ubus rpcd-mod-file"
+else
+    echo "  • After firmware upgrades, you may need to reinstall packages: opkg install uhttpd-mod-ubus rpcd-mod-file"
+fi
 echo "  • For multiple routers, run this script on each one"
 echo "  • Consider using a stronger password for production"
 
