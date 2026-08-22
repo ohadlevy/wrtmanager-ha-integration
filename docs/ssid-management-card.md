@@ -15,6 +15,8 @@ A global table of every SSID visible to WrtManager, with one row per network:
 - **Hidden** — eye-off icon if the SSID is hidden, dash otherwise
 - **Devices** — live count of connected clients on this SSID
 
+![WiFi Networks Card](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-154/wifi-networks-desktop.png)
+
 ### Router Health card SSID pills
 
 The existing `custom:router-health-card` now shows small pills at the bottom of each router tile listing all SSIDs active on that router. Each pill shows the SSID name, band summary (`2.4+5`, `2.4`, `5GHz`), and connected device count. Disabled SSIDs appear strikethrough and dimmed.
