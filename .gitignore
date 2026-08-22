@@ -139,7 +139,8 @@ ieee-oui36.txt
 # Local development
 .env.local
 local_settings.py
-test_credentials.jsonopenwrt_data_validation.json
+test_credentials.json
+openwrt_data_validation.json
 bandit-report.json
 
 # E2E test infrastructure (per-worktree state files)

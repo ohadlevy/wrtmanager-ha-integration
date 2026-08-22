@@ -11,6 +11,9 @@ views:
       # Router health: memory, load, temperature, traffic, device count
       - type: custom:router-health-card
 
+      # WiFi networks: all SSIDs, frequency bands, security, client counts
+      - type: custom:wifi-networks-card
+
       # Network interface status: IP, media, up/down per router
       - type: custom:interface-health-card
 

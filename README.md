@@ -19,11 +19,12 @@ A comprehensive Home Assistant integration for managing OpenWrt networks with mu
 
 ### Custom Lovelace Cards
 - **Network Devices**: Devices grouped by AP with search, signal bars, and disconnect action
-- **Router Health**: Memory, load average, traffic, and device count per router
+- **Router Health**: Memory, load average, traffic, SSIDs, and device count per router
 - **Network Topology**: Visual radial layout with signal quality color coding
 - **Signal Heatmap**: Signal strength list with quality filtering
 - **Roaming Activity**: Live roaming event log tracking AP changes in real time
 - **Interface Health**: Per-router network interface status with color-coded health indicators
+- **WiFi Networks**: Global overview of all SSIDs across routers with frequency bands and security
 
 ### Security & Performance
 - **HTTP ubus API**: Secure communication without SSH access required
@@ -46,11 +47,11 @@ A comprehensive Home Assistant integration for managing OpenWrt networks with mu
 
 ### Step 1: Setup OpenWrt Routers
 
-Configure each of your OpenWrt routers from a Linux machine with SSH root access:
+Configure each of your OpenWrt routers from a machine (Linux or macOS) with SSH root access:
 
 ```bash
-# Download the setup script once on your Linux machine
-wget https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/main/scripts/setup_openwrt_ha_integration.sh
+# Download the setup script
+curl -sLO https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/main/scripts/setup_openwrt_ha_integration.sh
 chmod +x setup_openwrt_ha_integration.sh
 
 # Run it for each router (provide router IP and hass user password)
@@ -64,7 +65,7 @@ chmod +x setup_openwrt_ha_integration.sh
 ```
 
 **Requirements:**
-- Linux machine with SSH access to your routers
+- Linux or macOS machine with SSH access to your routers (`openssl` or `mkpasswd` available)
 - Root SSH access to each OpenWrt router
 - Internet access on routers for package installation
 
@@ -185,16 +186,47 @@ Automatically identifies and categorizes:
 
 ## Custom Lovelace Cards
 
-WrtManager ships with 6 custom Lovelace cards that auto-register on integration setup. All cards auto-discover your routers and devices from the HA device registry — no manual entity configuration needed.
+WrtManager ships with 7 custom Lovelace cards that auto-register on integration setup. All cards auto-discover your routers and devices from the HA device registry — no manual entity configuration needed.
 
 | Card | Description |
 |------|-------------|
-| `custom:network-devices-card` | WiFi devices grouped by AP with search, signal bars, cross-integration badges, and disconnect action |
-| `custom:router-health-card` | Router health overview — memory, load average, traffic, device count per router |
+| `custom:network-devices-card` | WiFi & wired devices grouped by AP with search, signal bars, cross-integration badges, and disconnect action |
+| `custom:router-health-card` | Router health overview — memory, load average, traffic, SSIDs, and device count per router |
 | `custom:network-topology-card` | Visual radial network topology with signal quality color coding |
+| `custom:wifi-networks-card` | Global SSID table with frequency bands, encryption, and client counts across all APs |
 | `custom:signal-heatmap-card` | Signal strength list with quality filter chips (Poor/Fair/Good/Excellent) |
 | `custom:roaming-activity-card` | Active roamers and live roaming event log tracking AP changes in real time |
 | `custom:interface-health-card` | Per-router network interface status with IP, media type, and health indicators |
+
+### Card Gallery
+
+#### Network Devices Card
+WiFi and wired clients grouped by access point, with real-time signal strength, IP/MAC, vendor recognition, and disconnect action.
+![Network Devices Card](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-154/network-devices-desktop.png)
+
+#### Router Health Card
+Per-router system health metrics including CPU load, memory utilization, cumulative network traffic, active SSIDs, and connected client count.
+![Router Health Card](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-154/router-health-desktop.png)
+
+#### Network Topology Card
+Radial visual topology mapping connected devices to their respective routers with color-coded signal quality indicators.
+![Network Topology Card](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-154/network-topology-desktop.png)
+
+#### WiFi Networks Card
+Unified view of all broadcast SSIDs across your network, showing supported frequency bands (2.4GHz / 5GHz), security types, and connected device counts.
+![WiFi Networks Card](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-154/wifi-networks-desktop.png)
+
+#### Signal Heatmap Card
+All wireless clients ranked by signal strength (dBm) with interactive quality filter chips (Poor, Fair, Good, Excellent).
+![Signal Heatmap Card](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-154/signal-heatmap-desktop.png)
+
+#### Roaming Activity Card
+Real-time IEEE 802.11r fast roaming monitor displaying current roaming clients and an event log of AP transitions.
+![Roaming Activity Card](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-154/roaming-activity-desktop.png)
+
+#### Interface Health Card
+Per-router network interface status displaying IP addresses, interface types, carrier state, and TX/RX error counters.
+![Interface Health Card](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-154/interface-health-desktop.png)
 
 ### Quick Start
 
@@ -206,10 +238,11 @@ views:
     cards:
       - type: custom:network-devices-card
       - type: custom:router-health-card
-      - type: custom:network-topology-card
+      - type: custom:wifi-networks-card
+      - type: custom:interface-health-card
       - type: custom:signal-heatmap-card
       - type: custom:roaming-activity-card
-      - type: custom:interface-health-card
+      - type: custom:network-topology-card
 ```
 
 ### Card Options
@@ -239,6 +272,8 @@ max_log_entries: 50
 ### Full Dashboard Example
 
 See [`examples/dashboard.yaml`](examples/dashboard.yaml) for a complete dashboard with all custom cards and traffic monitoring.
+
+![WrtManager Full Dashboard](https://raw.githubusercontent.com/ohadlevy/wrtmanager-ha-integration/screenshots/pr-150/dashboard-cards-desktop.png)
 
 ## Troubleshooting
 
